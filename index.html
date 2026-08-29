@@ -312,6 +312,13 @@
         setCurrentGuesses({}); setIsCreating(false);
       }
 
+      // La nouvelle fonction pour le bouton "Quitter"
+      function handleQuit() {
+        if (window.confirm("Es-tu sûr de vouloir quitter cette affaire ? Tu devras rejoindre à nouveau avec le code si tu changes d'avis.")) {
+          resetAll();
+        }
+      }
+
       let view = "home";
       if (isCreating) view = "create";
       else if (code && !game) view = "loading";
@@ -350,7 +357,7 @@
             
             {code && (
               <div style={{ textAlign: "center", marginTop: "20px" }}>
-                <button onClick={resetAll} className="btn btn-ghost" style={{ fontSize: "11px", opacity: 0.5 }}>
+                <button onClick={handleQuit} className="btn btn-ghost" style={{ fontSize: "11px", opacity: 0.5 }}>
                   🚪 Quitter la partie
                 </button>
               </div>
