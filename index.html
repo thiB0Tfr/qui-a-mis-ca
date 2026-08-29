@@ -1,0 +1,632 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Qui a mis ça ? - Édition Maître du Jeu</title>
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <!-- Ajout de Firebase -->
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+  <style>
+    body { margin: 0; padding: 0; background: #14161c; }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script type="text/babel">
+    const { useState, useEffect } = React;
+
+    /* ---------- Configuration Firebase ---------- */
+    // REMPLACE L'URL CI-DESSOUS PAR CELLE DE TA BASE FIREBASE
+    const firebaseConfig = {
+      databaseURL: "https://qui-a-mis-ca-default-rtdb.europe-west1.firebasedatabase.app" 
+    };
+    
+    if (!firebase.apps.length) {
+      firebase.initializeApp(firebaseConfig);
+    }
+    const db = firebase.database();
+
+    /* ---------- Icônes ---------- */
+    const Copy = ({ size = 16 }) => (
+      <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>
+    );
+    const Check = ({ size = 16 }) => (
+      <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+    );
+    const Users = ({ size = 14 }) => (
+      <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+    );
+    const Music = ({ size = 14 }) => (
+      <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
+    );
+
+    /* ---------- Polices ---------- */
+    const FONT_HREF = "https://fonts.googleapis.com/css2?family=Special+Elite&family=Permanent+Marker&family=Work+Sans:wght@400;500;600;700;800&display=swap";
+    function useGoogleFonts() {
+      useEffect(() => {
+        if (document.getElementById("qamc-fonts")) return;
+        const link = document.createElement("link");
+        link.id = "qamc-fonts";
+        link.rel = "stylesheet";
+        link.href = FONT_HREF;
+        document.head.appendChild(link);
+      }, []);
+    }
+
+    /* ---------- Helpers ---------- */
+    const LETTERS = "ABCDEFGHJKLMNPQRSTUVWXYZ";
+    function genCode() {
+      let s = "";
+      for (let i = 0; i < 4; i++) s += LETTERS[Math.floor(Math.random() * LETTERS.length)];
+      return s;
+    }
+    function genId() {
+      return Math.random().toString(36).slice(2, 10);
+    }
+
+    /* ---------- Base de données Multijoueur ---------- */
+    function toPath(key) {
+      return key.replace(/:/g, '/');
+    }
+
+    async function sGet(key) {
+      try {
+        const snap = await db.ref(toPath(key)).once('value');
+        return snap.val();
+      } catch (e) { return null; }
+    }
+
+    async function sSet(key, value) {
+      try {
+        await db.ref(toPath(key)).set(value);
+        return true;
+      } catch (e) { return false; }
+    }
+
+    async function sList(prefix) {
+      try {
+        const path = toPath(prefix).replace(/\/$/, '');
+        const snap = await db.ref(path).once('value');
+        const data = snap.val() || {};
+        return Object.keys(data).map(id => prefix + id);
+      } catch (e) { return []; }
+    }
+
+    /* ---------- Application ---------- */
+    function App() {
+      useGoogleFonts();
+
+      const [playerId] = useState(genId);
+      const [code, setCode] = useState("");
+      const [joinInput, setJoinInput] = useState("");
+      const [nameInput, setNameInput] = useState("");
+      const [name, setName] = useState("");
+      const [joined, setJoined] = useState(false);
+      const [game, setGame] = useState(null);
+      const [players, setPlayers] = useState([]);
+      const [songDrafts, setSongDrafts] = useState(["", "", ""]);
+      const [songsSaved, setSongsSaved] = useState(false);
+      const [error, setError] = useState("");
+      const [busy, setBusy] = useState(false);
+      const [myGuess, setMyGuess] = useState(null);
+      const [taggedIndex, setTaggedIndex] = useState(-1);
+      const [myScore, setMyScore] = useState(0);
+      const [copied, setCopied] = useState(false);
+      const [finalScores, setFinalScores] = useState(null);
+      const [loadingFinal, setLoadingFinal] = useState(false);
+      const [currentGuesses, setCurrentGuesses] = useState({});
+
+      useEffect(() => {
+        if (!code) return;
+        let stopped = false;
+        const poll = async () => {
+          const g = await sGet(`qamc:${code}:game`);
+          if (!stopped && g) {
+            setGame(g);
+            if (g.status === "quiz") {
+              const guesses = await sGet(`qamc:${code}:guesses:${g.currentIndex}`);
+              if (!stopped) setCurrentGuesses(guesses || {});
+            }
+          }
+          const keys = await sList(`qamc:${code}:player:`);
+          if (keys.length) {
+            const list = await Promise.all(keys.map((k) => sGet(k)));
+            if (!stopped) setPlayers(list.filter(Boolean).sort((a, b) => a.joinedAt - b.joinedAt));
+          }
+        };
+        poll();
+        const iv = setInterval(poll, 1500);
+        return () => { stopped = true; clearInterval(iv); };
+      }, [code]);
+
+      useEffect(() => {
+        setMyGuess(null);
+      }, [game && game.currentIndex]);
+
+      useEffect(() => {
+        if (!game || !game.revealed || !game.order) return;
+        if (taggedIndex === game.currentIndex) return;
+        setTaggedIndex(game.currentIndex);
+        const song = game.order[game.currentIndex];
+        if (song && myGuess && myGuess === song.ownerId) setMyScore((s) => s + 1);
+      }, [game && game.revealed, game && game.currentIndex]);
+
+      useEffect(() => {
+        if (game && game.status === "end" && !finalScores && !loadingFinal) {
+          loadFinalScores();
+        }
+      }, [game && game.status]);
+
+      async function loadFinalScores() {
+        setLoadingFinal(true);
+        const totals = {};
+        players.forEach((p) => { totals[p.id] = { id: p.id, name: p.name, correct: 0 }; });
+        const order = (game && game.order) || [];
+        for (let i = 0; i < order.length; i++) {
+          const g = await sGet(`qamc:${code}:guesses:${i}`);
+          if (!g) continue;
+          const ownerId = order[i].ownerId;
+          Object.keys(g).forEach((pid) => {
+            const guess = g[pid];
+            if (!totals[pid]) totals[pid] = { id: pid, name: guess.guessedName || "??", correct: 0 };
+            if (guess.guessedId === ownerId) totals[pid].correct += 1;
+          });
+        }
+        setFinalScores(Object.values(totals).sort((a, b) => b.correct - a.correct));
+        setLoadingFinal(false);
+      }
+
+      async function handleCreate() {
+        setBusy(true); setError("");
+        let c = genCode();
+        let tries = 0;
+        while ((await sGet(`qamc:${c}:game`)) && tries < 6) {
+          c = genCode(); tries++;
+        }
+        const g = { hostId: playerId, status: "lobby", order: [], currentIndex: -1, revealed: false, createdAt: Date.now() };
+        const ok = await sSet(`qamc:${c}:game`, g);
+        setBusy(false);
+        if (!ok) { setError("Impossible de créer l'enquête, réessaie."); return; }
+        setGame(g); setCode(c);
+      }
+
+      async function handleJoin() {
+        const c = joinInput.trim().toUpperCase();
+        if (!c) return;
+        setBusy(true); setError("");
+        const g = await sGet(`qamc:${c}:game`);
+        setBusy(false);
+        if (!g) { setError("Code introuvable. Vérifie auprès de la personne qui a lancé l'enquête."); return; }
+        setGame(g); setCode(c);
+      }
+
+      async function handleRegister() {
+        if (!nameInput.trim()) return;
+        setBusy(true);
+        const p = { id: playerId, name: nameInput.trim(), songs: [], joinedAt: Date.now() };
+        await sSet(`qamc:${code}:player:${playerId}`, p);
+        setBusy(false);
+        setName(nameInput.trim()); setJoined(true);
+      }
+
+      function updateDraft(i, val) {
+        setSongDrafts((d) => { const n = [...d]; n[i] = val; return n; });
+        setSongsSaved(false);
+      }
+
+      async function handleSaveSongs() {
+        const parsed = [];
+        for (const raw of songDrafts) {
+          if (!raw.trim()) continue;
+          parsed.push({ url: raw.trim() });
+        }
+        if (parsed.length === 0) {
+          setError("Ajoute au moins un indice avant de valider.");
+          return;
+        }
+        setError(""); setBusy(true);
+        const p = { id: playerId, name, songs: parsed, joinedAt: Date.now() };
+        await sSet(`qamc:${code}:player:${playerId}`, p);
+        setBusy(false); setSongsSaved(true);
+      }
+
+      async function handleStartQuiz() {
+        const pool = [];
+        players.forEach((pl) => {
+          (pl.songs || []).forEach((s) => pool.push({ ...s, ownerId: pl.id, ownerName: pl.name }));
+        });
+        if (pool.length < 2) return;
+        for (let i = pool.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [pool[i], pool[j]] = [pool[j], pool[i]];
+        }
+        const g = { ...game, status: "quiz", order: pool, currentIndex: 0, revealed: false };
+        setGame(g);
+        await sSet(`qamc:${code}:game`, g);
+      }
+
+      async function handleGuess(pid) {
+        if (!game || game.revealed) return;
+        
+        setMyGuess(pid);
+        const key = `qamc:${code}:guesses:${game.currentIndex}`;
+        const cur = (await sGet(key)) || {};
+        const guessedPlayer = players.find((p) => p.id === pid);
+        cur[playerId] = { guessedId: pid, guessedName: (guessedPlayer && guessedPlayer.name) || "?" };
+        
+        await sSet(key, cur);
+        setCurrentGuesses(cur);
+      }
+
+      async function handleReveal() {
+        const g = { ...game, revealed: true };
+        setGame(g);
+        await sSet(`qamc:${code}:game`, g);
+      }
+
+      async function handleNext() {
+        const ni = game.currentIndex + 1;
+        const g = ni >= game.order.length
+          ? { ...game, status: "end", revealed: false }
+          : { ...game, currentIndex: ni, revealed: false };
+        setGame(g);
+        setFinalScores(null);
+        await sSet(`qamc:${code}:game`, g);
+      }
+
+      function copyCode() {
+        try {
+          navigator.clipboard.writeText(code);
+          setCopied(true);
+          setTimeout(() => setCopied(false), 1500);
+        } catch (e) {}
+      }
+
+      function resetAll() {
+        setCode(""); setGame(null); setPlayers([]); setJoined(false); setName("");
+        setNameInput(""); setJoinInput(""); setSongDrafts(["", "", ""]); setSongsSaved(false);
+        setMyGuess(null); setTaggedIndex(-1); setMyScore(0); setFinalScores(null); setError("");
+        setCurrentGuesses({});
+      }
+
+      let view = "home";
+      if (code && !game) view = "loading";
+      else if (code && game && !joined) view = "name";
+      else if (code && game && joined) {
+        if (game.status === "quiz") view = "quiz";
+        else if (game.status === "end") view = "end";
+        else view = "lobby";
+      }
+
+      const readyPlayers = players.filter((p) => p.songs && p.songs.length > 0);
+      const totalEvidence = players.reduce((n, p) => n + ((p.songs && p.songs.length) || 0), 0);
+
+      return (
+        <div className="qamc-root">
+          <style>{CSS}</style>
+          <div className="board">
+            {view === "loading" && <div className="folder"><p className="lobby-hint">Chargement du dossier…</p></div>}
+            {view === "home" && <HomeScreen onCreate={handleCreate} joinInput={joinInput} setJoinInput={setJoinInput} onJoin={handleJoin} busy={busy} error={error} />}
+            {view === "name" && <NameScreen code={code} nameInput={nameInput} setNameInput={setNameInput} onRegister={handleRegister} busy={busy} />}
+            {view === "lobby" && (
+              <LobbyScreen
+                code={code} copied={copied} onCopy={copyCode} players={players} songDrafts={songDrafts} updateDraft={updateDraft}
+                onSaveSongs={handleSaveSongs} songsSaved={songsSaved} error={error} onStart={handleStartQuiz}
+                readyCount={readyPlayers.length} totalEvidence={totalEvidence} playerId={playerId} isHost={game.hostId === playerId}
+              />
+            )}
+            {view === "quiz" && game && (
+              <QuizScreen
+                game={game} players={players} myGuess={myGuess} onGuess={handleGuess} onReveal={handleReveal}
+                onNext={handleNext} myScore={myScore} playerId={playerId} currentGuesses={currentGuesses}
+              />
+            )}
+            {view === "end" && <EndScreen finalScores={finalScores} loading={loadingFinal} onReplay={resetAll} />}
+          </div>
+        </div>
+      );
+    }
+
+    function HomeScreen({ onCreate, joinInput, setJoinInput, onJoin, busy, error }) {
+      return (
+        <div className="folder">
+          <div className="stamp-corner">CONFIDENTIEL</div>
+          <h1 className="title">QUI A MIS ÇA ?</h1>
+          <p className="subtitle">Le blind test avec l'hôte DJ</p>
+          <div className="divider" />
+          <button className="btn btn-primary" onClick={onCreate} disabled={busy}>
+            👑 Créer et devenir l'hôte
+          </button>
+          <div className="or">— ou —</div>
+          <div className="join-row">
+            <input className="input code-input" placeholder="CODE" maxLength={4} value={joinInput} onChange={(e) => setJoinInput(e.target.value.toUpperCase())} onKeyDown={(e) => e.key === "Enter" && onJoin()} />
+            <button className="btn btn-secondary" onClick={onJoin} disabled={busy}>Rejoindre</button>
+          </div>
+          {error && <p className="error">{error}</p>}
+        </div>
+      );
+    }
+
+    function NameScreen({ code, nameInput, setNameInput, onRegister, busy }) {
+      return (
+        <div className="folder">
+          <p className="eyebrow">Affaire n°{code}</p>
+          <h1 className="title small">Comment on t'appelle, suspect ?</h1>
+          <input className="input" placeholder="Ton prénom" value={nameInput} onChange={(e) => setNameInput(e.target.value)} onKeyDown={(e) => e.key === "Enter" && onRegister()} autoFocus />
+          <button className="btn btn-primary" onClick={onRegister} disabled={busy || !nameInput.trim()}>C'est moi</button>
+        </div>
+      );
+    }
+
+    function LobbyScreen({ code, copied, onCopy, players, songDrafts, updateDraft, onSaveSongs, songsSaved, error, onStart, readyCount, totalEvidence, playerId, isHost }) {
+      const canStart = readyCount >= 2;
+      return (
+        <div className="lobby">
+          <div className="case-header">
+            <div>
+              <p className="eyebrow">Dossier</p>
+              <h1 className="case-code">{code}</h1>
+            </div>
+            <button className="btn btn-ghost" onClick={onCopy}>
+              {copied ? <Check size={16} /> : <Copy size={16} />} {copied ? "Copié" : "Copier"}
+            </button>
+          </div>
+          <p className="lobby-hint">
+            Dépose tes musiques. L'hôte se chargera de les diffuser pendant la partie !
+          </p>
+
+          <div className="evidence-form">
+            <p className="section-label">Tes choix musicaux</p>
+            {songDrafts.map((val, i) => (
+              <div key={i} className="evidence-slot">
+                <span className="slot-num">{i + 1}</span>
+                <input
+                  className="input"
+                  placeholder="Lien (Youtube, Spotify...) ou Titre exact"
+                  value={val}
+                  onChange={(e) => updateDraft(i, e.target.value)}
+                />
+              </div>
+            ))}
+            {error && <p className="error">{error}</p>}
+            <button className="btn btn-primary" onClick={onSaveSongs}>
+              {songsSaved ? "✓ Choix validés — mettre à jour" : "Valider mes choix"}
+            </button>
+          </div>
+
+          <div className="suspects">
+            <p className="section-label"><Users size={14} /> Suspects ({players.length})</p>
+            <div className="suspect-grid">
+              {players.map((p) => (
+                <div key={p.id} className="pin-card">
+                  <span className="pin" />
+                  <span className="pin-name">{p.name}{p.id === playerId ? " (toi)" : ""}</span>
+                  <span className={`pin-status ${p.songs && p.songs.length ? "ready" : ""}`}>{p.songs ? p.songs.length : 0}/3</span>
+                </div>
+              ))}
+            </div>
+          </div>
+          
+          {isHost ? (
+            <button className="btn btn-danger" onClick={onStart} disabled={!canStart}>
+              🚨 Lancer la partie{!canStart ? " (2 suspects prêts min.)" : ""}
+            </button>
+          ) : (
+            <p className="waiting" style={{marginTop: "20px"}}>En attente que l'hôte lance la partie...</p>
+          )}
+          <p className="tiny-hint">{totalEvidence} musique(s) au total dans la playlist</p>
+        </div>
+      );
+    }
+
+    function QuizScreen({ game, players, myGuess, onGuess, onReveal, onNext, myScore, playerId, currentGuesses = {} }) {
+      const isHost = game.hostId === playerId;
+      const song = game.order[game.currentIndex];
+      const total = game.order.length;
+      if (!song) return null;
+      
+      const isUrl = song.url.startsWith("http");
+      const votesCount = Object.keys(currentGuesses).length;
+
+      return (
+        <div className="quiz">
+          <div className="quiz-top">
+            <span className="eyebrow">Piste n°{game.currentIndex + 1} / {total}</span>
+            <span className="score-chip"><Music size={14} /> {myScore} pts</span>
+          </div>
+
+          <div className="evidence-card">
+            {game.revealed && (
+              <div className="stamp">
+                C'ÉTAIT
+                <br />
+                {song.ownerName}
+              </div>
+            )}
+            
+            <div className="dj-booth">
+              {!game.revealed && !isHost ? (
+                <div className="mystery-box">
+                  <div className="pulsing-dot"></div>
+                  <span>🎧 L'hôte diffuse la musique...</span>
+                </div>
+              ) : (
+                <div className="reveal-box">
+                  <p className="eyebrow">{game.revealed ? "Indice révélé :" : "À TOI DE JOUER :"}</p>
+                  {isUrl ? (
+                    <a href={song.url} target="_blank" rel="noreferrer" className="btn btn-primary" style={{marginTop: '10px'}}>
+                      🔗 Ouvrir le lien
+                    </a>
+                  ) : (
+                    <p className="song-title-text">{song.url}</p>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {!game.revealed && (
+            <>
+              <p className="prompt">À qui appartient ce choix ?</p>
+              <div className="suspect-buttons">
+                {players.map((p) => (
+                  <button 
+                    key={p.id} 
+                    className={`accuse-btn ${myGuess === p.id ? "picked" : ""}`} 
+                    onClick={() => onGuess(p.id)} 
+                    disabled={game.revealed}
+                  >
+                    {p.name}
+                  </button>
+                ))}
+              </div>
+              
+              {myGuess && <p className="waiting">Ton accusation est enregistrée (tu peux encore changer). 🤫</p>}
+              
+              {isHost && (
+                <div style={{ marginTop: "15px", textAlign: "center" }}>
+                  <p className="waiting" style={{ marginBottom: "10px", color: "var(--spotlight)" }}>
+                    📊 {votesCount} / {players.length} joueur(s) ont voté
+                  </p>
+                  <button className="btn btn-secondary" onClick={onReveal}>
+                    Révéler la vérité
+                  </button>
+                </div>
+              )}
+            </>
+          )}
+
+          {game.revealed && (
+            <>
+              {myGuess && (
+                <p className={`feedback ${myGuess === song.ownerId ? "good" : "bad"}`}>
+                  {myGuess === song.ownerId ? "Bien vu, détective 🕵️" : `Raté, c'était ${song.ownerName}`}
+                </p>
+              )}
+              {isHost ? (
+                <button className="btn btn-primary" onClick={onNext}>
+                  {game.currentIndex + 1 >= total ? "Voir le classement final" : "Musique suivante"}
+                </button>
+              ) : (
+                <p className="waiting">L'hôte va passer à la suite...</p>
+              )}
+            </>
+          )}
+        </div>
+      );
+    }
+
+    function EndScreen({ finalScores, loading, onReplay }) {
+      return (
+        <div className="folder end">
+          <div className="stamp-corner big">DOSSIER CLOS</div>
+          <h1 className="title small">Classement final</h1>
+          {loading && <p className="lobby-hint">Calcul des scores…</p>}
+          {!loading && finalScores && (
+            <div className="ranking">
+              {finalScores.map((p, i) => (
+                <div key={p.id} className={`rank-row ${i === 0 ? "first" : ""}`}>
+                  <span className="rank-pos">{i + 1}</span>
+                  <span className="rank-name">{p.name}</span>
+                  <span className="rank-score">{p.correct} pts</span>
+                </div>
+              ))}
+            </div>
+          )}
+          <button className="btn btn-primary" onClick={onReplay}>Nouvelle partie</button>
+        </div>
+      );
+    }
+
+    const CSS = `
+    .qamc-root { --ink: #14161c; --ink-2: #1c1f27; --cork: #6b4e32; --paper: #f2e8d5; --paper-2: #e8dcc3; --thread: #d64545; --thread-dark: #a93030; --spotlight: #e8a33d; --pencil: #3a2e22; --ok: #4c9a6a; min-height: 100vh; width: 100%; background: radial-gradient(circle at 20% 10%, #23262f 0%, var(--ink) 55%); color: var(--paper); font-family: 'Work Sans', sans-serif; display: flex; justify-content: center; padding: 32px 16px; box-sizing: border-box; }
+    .qamc-root *, .qamc-root *::before, .qamc-root *::after { box-sizing: border-box; }
+    .qamc-root button:focus-visible, .qamc-root input:focus-visible { outline: 2px solid var(--spotlight); outline-offset: 2px; }
+    .board { width: 100%; max-width: 480px; }
+    .folder { background: var(--paper); color: var(--pencil); border-radius: 6px; padding: 36px 28px; position: relative; box-shadow: 0 18px 40px rgba(0,0,0,0.45); transform: rotate(-0.6deg); }
+    .folder.end { transform: rotate(0.5deg); }
+    .stamp-corner { position: absolute; top: 16px; right: 4px; border: 2px solid var(--thread); color: var(--thread); font-family: 'Special Elite', monospace; font-size: 10px; letter-spacing: 1.5px; padding: 3px 8px; transform: rotate(8deg); opacity: 0.75; }
+    .stamp-corner.big { font-size: 13px; }
+    .title { font-family: 'Special Elite', monospace; font-size: 34px; line-height: 1.1; margin: 6px 0 4px; letter-spacing: 0.5px; }
+    .title.small { font-size: 22px; }
+    .subtitle { margin: 0 0 20px; opacity: 0.75; font-size: 14px; }
+    .eyebrow { font-family: 'Special Elite', monospace; font-size: 11px; letter-spacing: 2px; text-transform: uppercase; opacity: 0.6; margin: 0 0 4px; }
+    .divider { height: 1px; background: repeating-linear-gradient(90deg, var(--pencil) 0 6px, transparent 6px 12px); opacity: 0.3; margin: 18px 0; }
+    .btn { font-family: 'Work Sans', sans-serif; font-weight: 700; font-size: 15px; border: none; border-radius: 8px; padding: 14px 18px; cursor: pointer; width: 100%; transition: transform 0.12s ease; display: inline-flex; align-items: center; justify-content: center; gap: 8px; text-decoration: none; }
+    .btn:active { transform: scale(0.97); }
+    .btn:disabled { opacity: 0.45; cursor: not-allowed; }
+    .btn-primary { background: var(--spotlight); color: #241705; box-shadow: 0 4px 0 #a5701f; }
+    .btn-danger { background: var(--thread); color: #fff; box-shadow: 0 4px 0 var(--thread-dark); margin-top: 18px; }
+    .btn-secondary { background: var(--ink); color: var(--paper); }
+    .btn-ghost { background: transparent; border: 1px solid rgba(242,232,213,0.35); color: var(--paper); width: auto; padding: 8px 12px; font-size: 13px; }
+    .or { text-align: center; font-size: 12px; opacity: 0.5; margin: 16px 0; font-family: 'Special Elite', monospace; }
+    .join-row { display: flex; gap: 8px; }
+    .input { font-family: 'Work Sans', sans-serif; font-size: 15px; padding: 12px 14px; border-radius: 8px; border: 1.5px solid rgba(58,46,34,0.25); background: #fff; color: var(--pencil); width: 100%; margin-bottom: 12px; }
+    .code-input { text-transform: uppercase; letter-spacing: 4px; font-family: 'Special Elite', monospace; text-align: center; }
+    .error { color: var(--thread-dark); font-size: 13px; margin: -4px 0 12px; }
+    .lobby { background: var(--cork); border-radius: 12px; padding: 24px; position: relative; background-image: radial-gradient(rgba(0,0,0,0.12) 1px, transparent 1px); background-size: 10px 10px; box-shadow: 0 18px 40px rgba(0,0,0,0.5); }
+    .case-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+    .case-code { font-family: 'Special Elite', monospace; font-size: 30px; letter-spacing: 4px; color: var(--paper); margin: 0; }
+    .lobby-hint { color: var(--paper-2); font-size: 13px; opacity: 0.85; margin: 0 0 20px; }
+    .section-label { font-family: 'Special Elite', monospace; font-size: 12px; letter-spacing: 1.5px; text-transform: uppercase; color: var(--paper); opacity: 0.8; display: flex; align-items: center; gap: 6px; margin: 18px 0 10px; }
+    .evidence-form { background: rgba(242,232,213,0.06); border: 1px dashed rgba(242,232,213,0.25); border-radius: 10px; padding: 16px; }
+    .evidence-slot { display: flex; align-items: center; gap: 6px; margin-bottom: 10px; }
+    .evidence-slot .input { margin-bottom: 0; flex: 1; min-width: 0; }
+    .slot-num { font-family: 'Special Elite', monospace; color: var(--spotlight); font-size: 13px; width: 14px; flex-shrink: 0; text-align: center; }
+    .suspect-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 10px; }
+    .pin-card { background: var(--paper); border-radius: 6px; padding: 14px 10px 10px; position: relative; text-align: center; box-shadow: 0 6px 14px rgba(0,0,0,0.3); }
+    .pin-card:nth-child(3n+1) { transform: rotate(-2deg); }
+    .pin-card:nth-child(3n+2) { transform: rotate(1.5deg); }
+    .pin-card:nth-child(3n) { transform: rotate(-1deg); }
+    .pin { position: absolute; top: -6px; left: 50%; transform: translateX(-50%); width: 10px; height: 10px; border-radius: 50%; background: var(--thread); box-shadow: 0 2px 3px rgba(0,0,0,0.4); }
+    .pin-name { display: block; font-weight: 700; font-size: 13px; color: var(--pencil); margin-bottom: 4px; }
+    .pin-status { display: inline-block; font-size: 11px; font-family: 'Special Elite', monospace; color: #8a7a5c; }
+    .pin-status.ready { color: var(--ok); }
+    .tiny-hint { text-align: center; font-size: 11px; color: var(--paper-2); opacity: 0.6; margin-top: 10px; }
+    .quiz { background: var(--ink-2); border-radius: 14px; padding: 22px; box-shadow: 0 18px 40px rgba(0,0,0,0.5); }
+    .quiz-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
+    .score-chip { font-family: 'Special Elite', monospace; font-size: 12px; display: flex; align-items: center; gap: 4px; color: var(--spotlight); }
+    .evidence-card { background: var(--paper); border-radius: 10px; padding: 16px; position: relative; transform: rotate(-0.8deg); box-shadow: 0 10px 24px rgba(0,0,0,0.35); margin-bottom: 20px; }
+    
+    /* BOITE DJ/HOST */
+    .dj-booth { background: #1c1f27; border-radius: 8px; padding: 35px 20px; text-align: center; border: 1px solid rgba(242,232,213,0.1); }
+    .mystery-box { display: flex; flex-direction: column; align-items: center; gap: 16px; color: var(--spotlight); font-family: 'Special Elite', monospace; font-size: 15px; }
+    .pulsing-dot { width: 30px; height: 30px; background: var(--spotlight); border-radius: 50%; animation: pulse 1.5s infinite; }
+    @keyframes pulse { 0% { transform: scale(0.8); opacity: 0.5; } 50% { transform: scale(1.1); opacity: 1; } 100% { transform: scale(0.8); opacity: 0.5; } }
+    .reveal-box { display: flex; flex-direction: column; align-items: center; gap: 6px; }
+    .song-title-text { font-size: 18px; font-weight: 700; color: var(--paper); word-break: break-word; margin: 10px 0 0; }
+    
+    .stamp { position: absolute; z-index: 20; top: 46%; left: 50%; transform: translate(-50%, -50%) rotate(-12deg) scale(1); font-family: 'Permanent Marker', cursive; color: var(--thread); border: 4px solid var(--thread); padding: 6px 16px; font-size: 22px; text-align: center; line-height: 1.1; background: rgba(242,232,213,0.92); border-radius: 8px; animation: stampIn 0.35s ease-out; }
+    @keyframes stampIn { 0% { transform: translate(-50%, -50%) rotate(-12deg) scale(2.2); opacity: 0; } 70% { opacity: 1; } 100% { transform: translate(-50%, -50%) rotate(-12deg) scale(1); opacity: 1; } }
+    @media (prefers-reduced-motion: reduce) { .stamp { animation: none; } }
+    
+    .prompt { font-family: 'Special Elite', monospace; text-align: center; margin: 0 0 10px; color: var(--paper); font-size: 14px; }
+    .suspect-buttons { display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 8px; margin-bottom: 14px; }
+    .accuse-btn { background: var(--ink); color: var(--paper); border: 1.5px solid rgba(242,232,213,0.2); border-radius: 8px; padding: 10px 8px; font-weight: 600; font-size: 13px; cursor: pointer; }
+    .accuse-btn.picked { background: var(--spotlight); color: #241705; border-color: var(--spotlight); }
+    .accuse-btn:disabled { opacity: 0.6; }
+    .waiting { text-align: center; font-size: 12px; color: var(--paper-2); opacity: 0.7; margin: 10px 0; font-style: italic; }
+    .feedback { text-align: center; font-weight: 700; margin: 16px 0; font-size: 15px; }
+    .feedback.good { color: #7ed19a; }
+    .feedback.bad { color: #e08a8a; }
+    .ranking { margin: 20px 0; }
+    .rank-row { display: flex; align-items: center; gap: 10px; padding: 10px 0; border-bottom: 1px dashed rgba(58,46,34,0.2); }
+    .rank-row.first { font-weight: 800; }
+    .rank-pos { font-family: 'Special Elite', monospace; width: 22px; }
+    .rank-name { flex: 1; }
+    .rank-score { font-family: 'Special Elite', monospace; }
+    @media (max-width: 400px) {
+      .title { font-size: 26px; }
+      .case-code { font-size: 24px; }
+    }
+    `;
+
+    ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+  </script>
+</body>
+</html>
