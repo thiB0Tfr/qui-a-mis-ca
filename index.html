@@ -349,6 +349,7 @@
             )}
             {view === "quiz" && game && (
               <QuizScreen
+                code={code}
                 game={game} players={players} myGuess={myGuess} onGuess={handleGuess} onReveal={handleReveal} onStartTimer={handleStartTimer}
                 onNext={handleNext} myScore={myScore} playerId={playerId} currentGuesses={currentGuesses}
               />
