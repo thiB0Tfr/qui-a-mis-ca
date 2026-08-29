@@ -84,7 +84,7 @@
       const [joined, setJoined] = useState(false);
       const [game, setGame] = useState(null);
       const [players, setPlayers] = useState([]);
-      const [songDrafts, setSongDrafts] = useState(["", "", "", "", ""]);
+      const [songDrafts, setSongDrafts] = useState([]);
       const [songsSaved, setSongsSaved] = useState(false);
       const [error, setError] = useState("");
       const [busy, setBusy] = useState(false);
@@ -134,7 +134,7 @@
             setName(me.name);
             setJoined(true);
             if (me.songs && me.songs.length > 0) {
-              const drafts = ["", "", "", "", ""];
+              const drafts = [];
               me.songs.forEach((s, i) => drafts[i] = s.url);
               setSongDrafts(drafts);
               setSongsSaved(true);
@@ -313,7 +313,7 @@
         setCode("");
         localStorage.removeItem("qamc_code"); // Supprime la sauvegarde en mémoire
         setGame(null); setPlayers([]); setJoined(false); setName("");
-        setNameInput(""); setJoinInput(""); setSongDrafts(["", "", "", "", ""]); setSongsSaved(false);
+        setNameInput(""); setJoinInput(""); setSongDrafts([]); setSongsSaved(false);
         setMyGuess(null); setTaggedIndex(-1); setMyScore(0); setFinalScores(null); setError("");
         setCurrentGuesses({}); setIsCreating(false);
       }
@@ -399,20 +399,16 @@
           <input className="input" value={theme} onChange={e => setTheme(e.target.value)} placeholder="Ex: Années 80, Disney, Rap FR..." maxLength={40} />
 
           <p className="section-label">Pistes par suspect</p>
-          <select className="input" value={songs} onChange={e => setSongs(Number(e.target.value))}>
-            <option value={1}>1 musique par joueur</option>
-            <option value={2}>2 musiques par joueur</option>
-            <option value={3}>3 musiques par joueur</option>
-            <option value={5}>5 musiques par joueur</option>
-          </select>
+          <div style={{display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '12px'}}>
+            <input type="number" className="input" value={songs} onChange={e => setSongs(Math.max(1, Number(e.target.value)))} min="1" style={{marginBottom: 0, width: '80px', textAlign: 'center'}} />
+            <span style={{fontSize: '14px', color: 'var(--pencil)', opacity: 0.8}}>musique(s)</span>
+          </div>
 
           <p className="section-label">Chrono de vote</p>
-          <select className="input" value={timer} onChange={e => setTimer(Number(e.target.value))}>
-            <option value={0}>Désactivé (Infini)</option>
-            <option value={15}>15 secondes</option>
-            <option value={30}>30 secondes</option>
-            <option value={60}>60 secondes</option>
-          </select>
+          <div style={{display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '12px'}}>
+            <input type="number" className="input" value={timer} onChange={e => setTimer(Math.max(0, Number(e.target.value)))} min="0" step="5" style={{marginBottom: 0, width: '80px', textAlign: 'center'}} />
+            <span style={{fontSize: '14px', color: 'var(--pencil)', opacity: 0.8}}>secondes (0 = infini)</span>
+          </div>
 
           <p className="section-label">Visibilité des musiques</p>
           <select className="input" value={secret ? "true" : "false"} onChange={e => setSecret(e.target.value === "true")}>
