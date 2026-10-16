@@ -12,11 +12,16 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <link rel="apple-touch-icon" href="icon.png">
 
+  <!-- Bibliothèques -->
   <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
   <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
   <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
   <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+  
+  <!-- NOUVEAU : Générateur de PDF -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+
   <style>
     body { margin: 0; padding: 0; background: #14161c; }
   </style>
@@ -419,7 +424,12 @@
       return (
         <div className="qamc-root">
           <style>{CSS}</style>
-          <div className="board">
+          
+          {/* 
+            On désactive le conteneur principal 'board' quand on est sur 
+            l'écran de rapport, car le rapport prend toute la largeur 
+          */}
+          <div className={view === "end" && history ? "" : "board"}>
             {view === "loading" && <div className="folder"><p className="lobby-hint">Chargement du dossier…</p></div>}
             
             {view === "home" && <HomeScreen onCreate={() => setIsCreating(true)} joinInput={joinInput} setJoinInput={setJoinInput} onJoin={handleJoin} busy={busy} error={error} />}
@@ -447,7 +457,7 @@
             
             {view === "end" && <EndScreen code={code} theme={game.settings.theme} finalScores={finalScores} history={history} loading={loadingFinal} onReplay={resetAll} />}
             
-            {code && (
+            {code && view !== "end" && (
               <div className="no-print" style={{ textAlign: "center", marginTop: "20px" }}>
                 <button onClick={handleQuit} className="btn btn-ghost" style={{ fontSize: "11px", opacity: 0.5 }}>
                   🚪 Quitter la partie
@@ -459,6 +469,7 @@
       );
     }
 
+    /* ... Les autres composants restent identiques ... */
     function HomeScreen({ onCreate, joinInput, setJoinInput, onJoin, busy, error }) {
       return (
         <div className="folder">
@@ -766,107 +777,128 @@
     function EndScreen({ code, theme, finalScores, history, loading, onReplay }) {
       const [showReport, setShowReport] = useState(false);
       const [animating, setAnimating] = useState(true);
+      const [generatingPDF, setGeneratingPDF] = useState(false);
+
+      // NOUVEAU : Fonction de génération via html2pdf
+      function downloadPDF() {
+        setGeneratingPDF(true);
+        setAnimating(false); // On force l'affichage complet du texte immédiatement
+        
+        // On laisse 300ms à React pour bien afficher la fin du texte avant de prendre la photo
+        setTimeout(() => {
+          const element = document.getElementById('report-content-to-pdf');
+          if (!element) return;
+          
+          const opt = {
+            margin:       15, // Marge propre en mm
+            filename:     `Dossier_QAMC_${code}.pdf`,
+            image:        { type: 'jpeg', quality: 0.98 },
+            html2canvas:  { scale: 2, useCORS: true }, // Haute définition
+            jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' }
+          };
+
+          if (window.html2pdf) {
+            window.html2pdf().set(opt).from(element).save().then(() => {
+              setGeneratingPDF(false);
+            });
+          } else {
+            alert("Erreur: Le générateur PDF n'est pas chargé. Vérifiez votre connexion.");
+            setGeneratingPDF(false);
+          }
+        }, 300);
+      }
 
       if (showReport && history) {
         return (
-          <div className="print-area">
-            <div className="no-print" style={{display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px"}}>
-              <button className="btn btn-ghost" onClick={() => setShowReport(false)}>
+          <div className="report-full-view">
+            
+            {/* Barre d'outils web flottante */}
+            <div className="report-toolbar no-print">
+              <button className="btn btn-ghost" onClick={() => setShowReport(false)} style={{color: "var(--paper)", borderColor: "var(--paper)"}}>
                 ← Retour au classement
               </button>
+              
               {animating && (
                 <button className="btn btn-ghost" onClick={() => setAnimating(false)} style={{color: "var(--spotlight)", borderColor: "var(--spotlight)"}}>
                   ⏭️ Passer l'animation
                 </button>
               )}
+              
+              <button className="btn btn-primary" onClick={downloadPDF} disabled={generatingPDF}>
+                {generatingPDF ? "Création du PDF..." : "🖨️ Télécharger en PDF"}
+              </button>
             </div>
             
-            <div className="report-paper">
-              {/* Le contenu encapsulé dans un table pour générer les en-têtes et pieds de page sur CHAQUE page */}
-              <table className="report-table">
-                <thead className="print-thead">
-                  <tr><td><div className="print-spacer"></div></td></tr>
-                </thead>
-                <tbody>
-                  <tr><td className="print-content">
-                    <div className="print-stamp">DÉCLASSIFIÉ</div>
-                    
-                    <h1 className="report-title">
-                      <Typewriter text="RAPPORT D'OPÉRATION" active={animating} delay={0} />
-                    </h1>
-                    
-                    <div className="report-meta">
-                      <div className="meta-row">
-                        <span><Typewriter text="AFFAIRE N° :" active={animating} delay={300} /></span> 
-                        <strong><Typewriter text={code} active={animating} delay={450} /></strong>
-                      </div>
-                      <div className="meta-row">
-                        <span><Typewriter text="DATE :" active={animating} delay={600} /></span> 
-                        <strong><Typewriter text={new Date().toLocaleDateString('fr-FR')} active={animating} delay={750} /></strong>
-                      </div>
-                      <div className="meta-row">
-                        <span><Typewriter text="THÈME CONCERNÉ :" active={animating} delay={900} /></span> 
-                        <strong><Typewriter text={theme} active={animating} delay={1050} /></strong>
-                      </div>
-                      <div className="meta-row">
-                        <span><Typewriter text="STATUT :" active={animating} delay={1200} /></span> 
-                        <strong><Typewriter text="CLOS" active={animating} delay={1350} /></strong>
-                      </div>
-                    </div>
+            {/* 
+              LA FEUILLE A4 VIRTUELLE
+              C'est ce conteneur "report-content-to-pdf" qui sera pris en photo par la librairie
+            */}
+            <div id="report-content-to-pdf" className="report-paper-a4">
+              
+              {/* Le tampon ne coupera plus rien, il est fixé en haut à droite avec de la marge */}
+              <div className="stamp-container">
+                <div className="classified-stamp">DÉCLASSIFIÉ</div>
+              </div>
+              
+              <div className="report-header-line">
+                <span>ARCHIVES SECRÈTES Q.A.M.C</span>
+                <span>CODE : {code}</span>
+              </div>
 
-                    <h2 className="report-section-title">
-                      <Typewriter text="PIÈCES À CONVICTION" active={animating} delay={1600} />
-                    </h2>
-                    
-                    <div className="report-list">
-                      {history.map((h, i) => {
-                        const baseDelay = 1800 + i * 800;
-                        return (
-                          <div key={i} className="report-item">
-                            <div className="item-header">
-                              <Typewriter text={`PIÈCE N°${String(h.trackNum).padStart(2, '0')}`} active={animating} delay={baseDelay} />
-                            </div>
-                            <div className="item-content">
-                              <p>
-                                <strong><Typewriter text="CONTENU :" active={animating} delay={baseDelay + 150} /></strong> 
-                                {" "} <Typewriter text={h.url} active={animating} delay={baseDelay + 300} />
-                              </p>
-                              <p>
-                                <strong><Typewriter text="SUSPECT IDENTIFIÉ :" active={animating} delay={baseDelay + 450} /></strong> 
-                                {" "} <span className="highlight-owner"><Typewriter text={h.ownerName} active={animating} delay={baseDelay + 600} /></span>
-                              </p>
-                              <p>
-                                <strong><Typewriter text="DÉDUCTIONS EXACTES :" active={animating} delay={baseDelay + 750} /></strong> 
-                                {" "} <Typewriter text={h.correctGuessers.length > 0 ? h.correctGuessers.join(", ") : "Aucune. Parfaite dissimulation."} active={animating} delay={baseDelay + 900} />
-                              </p>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </td></tr>
-                </tbody>
-                <tfoot className="print-tfoot">
-                  <tr><td>
-                    <div className="print-footer-box">
-                      <div className="print-footer-inner">
-                        <span>ARCHIVES SECRÈTES - Q.A.M.C</span>
-                        <span className="page-number"></span>
-                        <span>DOSSIER #{code}</span>
+              <h1 className="report-title">
+                <Typewriter text="RAPPORT D'OPÉRATION" active={animating} delay={0} />
+              </h1>
+              
+              <div className="report-meta">
+                <div className="meta-row">
+                  <span><Typewriter text="DATE :" active={animating} delay={300} /></span> 
+                  <strong><Typewriter text={new Date().toLocaleDateString('fr-FR')} active={animating} delay={450} /></strong>
+                </div>
+                <div className="meta-row">
+                  <span><Typewriter text="THÈME CONCERNÉ :" active={animating} delay={600} /></span> 
+                  <strong><Typewriter text={theme} active={animating} delay={750} /></strong>
+                </div>
+                <div className="meta-row">
+                  <span><Typewriter text="STATUT DU DOSSIER :" active={animating} delay={900} /></span> 
+                  <strong><Typewriter text="RÉSOLU / CLOS" active={animating} delay={1050} /></strong>
+                </div>
+              </div>
+
+              <h2 className="report-section-title">
+                <Typewriter text="PIÈCES À CONVICTION" active={animating} delay={1300} />
+              </h2>
+              
+              <div className="report-list">
+                {history.map((h, i) => {
+                  const baseDelay = 1500 + i * 800;
+                  return (
+                    <div key={i} className="report-item">
+                      <div className="item-header">
+                        <Typewriter text={`PIÈCE N°${String(h.trackNum).padStart(2, '0')}`} active={animating} delay={baseDelay} />
+                      </div>
+                      <div className="item-content">
+                        <p>
+                          <strong><Typewriter text="CONTENU :" active={animating} delay={baseDelay + 150} /></strong> 
+                          {" "} <Typewriter text={h.url} active={animating} delay={baseDelay + 300} />
+                        </p>
+                        <p>
+                          <strong><Typewriter text="SUSPECT IDENTIFIÉ :" active={animating} delay={baseDelay + 450} /></strong> 
+                          {" "} <span className="highlight-owner"><Typewriter text={h.ownerName} active={animating} delay={baseDelay + 600} /></span>
+                        </p>
+                        <p>
+                          <strong><Typewriter text="DÉDUCTIONS EXACTES :" active={animating} delay={baseDelay + 750} /></strong> 
+                          {" "} <Typewriter text={h.correctGuessers.length > 0 ? h.correctGuessers.join(", ") : "Aucune. Parfaite dissimulation."} active={animating} delay={baseDelay + 900} />
+                        </p>
                       </div>
                     </div>
-                  </td></tr>
-                </tfoot>
-              </table>
-            </div>
+                  );
+                })}
+              </div>
+              
+              <div className="report-footer-line">
+                *** FIN DE TRANSMISSION ***
+              </div>
 
-            <div className="no-print" style={{display: "flex", gap: "10px", marginTop: "20px"}}>
-              <button className="btn btn-secondary" onClick={() => window.print()} style={{flex: 1}}>
-                🖨️ Sauvegarder PDF
-              </button>
-              <button className="btn btn-primary" onClick={onReplay} style={{flex: 1}}>
-                Nouveau Jeu
-              </button>
             </div>
           </div>
         );
@@ -997,86 +1029,54 @@
       .case-code { font-size: 24px; }
     }
 
-    /* --- STYLES DU RAPPORT SECRET --- */
-    .print-area { width: 100%; }
+    /* --- STYLES DU NOUVEAU RAPPORT (POUR HTML2PDF) --- */
+    .report-full-view { width: 100%; max-width: 800px; margin: 0 auto; padding-bottom: 50px; }
+    .report-toolbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 10px; }
     
-    /* Structure web avec table pour préparer l'impression */
-    table.report-table { width: 100%; border-collapse: collapse; }
-    .print-thead, .print-tfoot { display: none; } /* Cachés sur web */
+    /* La vraie feuille A4 affichée sur le Web et capturée en PDF */
+    .report-paper-a4 { 
+      background: #fff; 
+      color: #111; 
+      font-family: 'Courier Prime', Courier, monospace; 
+      position: relative; 
+      border-radius: 4px; 
+      box-shadow: 0 10px 30px rgba(0,0,0,0.5); 
+      padding: 40px 30px; 
+      text-align: left;
+    }
     
-    /* STYLE MACHINE À ÉCRIRE */
-    .report-paper { background: #fff; color: #111; font-family: 'Courier Prime', Courier, monospace; position: relative; border-radius: 4px; box-shadow: inset 0 0 20px rgba(0,0,0,0.05); padding: 30px 24px; margin-bottom: 20px; }
+    /* Le tampon repensé pour ne rien cacher */
+    .stamp-container { position: absolute; top: 30px; right: 30px; z-index: 10; pointer-events: none; }
+    .classified-stamp { 
+      color: #d64545; 
+      border: 4px solid #d64545; 
+      padding: 10px 20px; 
+      font-family: 'Special Elite', monospace; 
+      font-weight: bold; 
+      font-size: 22px; 
+      transform: rotate(12deg); 
+      opacity: 0.85; 
+      letter-spacing: 3px; 
+      border-radius: 4px;
+    }
+
+    .report-header-line { border-bottom: 3px double #111; margin-bottom: 30px; padding-bottom: 8px; display: flex; justify-content: space-between; font-weight: bold; font-size: 14px; opacity: 0.8; }
+    .report-footer-line { border-top: 3px double #111; margin-top: 40px; padding-top: 10px; text-align: center; font-weight: bold; font-size: 14px; opacity: 0.8; }
+
+    .report-title { font-family: 'Special Elite', monospace; font-size: 28px; text-align: left; margin: 0 0 24px; letter-spacing: 2px; }
     
-    .report-title { font-family: 'Special Elite', monospace; font-size: 28px; text-align: center; margin: 0 0 24px; border-bottom: 2px solid #222; padding-bottom: 12px; letter-spacing: 2px; }
-    .report-meta { border: 2px solid #222; padding: 12px; margin-bottom: 24px; display: grid; grid-template-columns: 1fr; gap: 8px; font-size: 15px; background: rgba(0,0,0,0.02); }
+    .report-meta { padding: 15px; margin-bottom: 30px; display: grid; grid-template-columns: 1fr; gap: 10px; font-size: 15px; background: rgba(0,0,0,0.03); border-left: 4px solid #111; }
     .meta-row { display: flex; justify-content: space-between; border-bottom: 1px dotted #888; padding-bottom: 4px; min-height: 20px; }
     .meta-row:last-child { border-bottom: none; padding-bottom: 0; }
-    .report-section-title { font-size: 18px; border-bottom: 1px solid #222; margin-bottom: 16px; padding-bottom: 6px; font-weight: bold; min-height: 24px; text-transform: uppercase; }
+    
+    .report-section-title { font-size: 18px; border-bottom: 2px solid #111; margin-bottom: 20px; padding-bottom: 6px; font-weight: bold; min-height: 24px; text-transform: uppercase; }
     
     .report-list { text-align: left; }
-    .report-item { border: 1px solid #777; margin-bottom: 16px; background: #fff; box-shadow: 2px 2px 0px rgba(0,0,0,0.1); }
-    .item-header { background: #e5e5e5; padding: 8px 12px; font-weight: bold; border-bottom: 1px solid #777; font-family: 'Special Elite', monospace; font-size: 15px; min-height: 22px; color: #111; }
-    .item-content { padding: 12px; font-size: 14px; line-height: 1.6; }
-    .item-content p { margin: 6px 0; word-break: break-word; min-height: 18px; }
-    .highlight-owner { font-weight: bold; font-size: 14px; text-transform: uppercase; }
-
-    .print-stamp { position: absolute; top: 15px; right: 15px; color: #d64545; border: 3px solid #d64545; padding: 8px 16px; font-family: 'Special Elite', monospace; font-weight: bold; font-size: 20px; transform: rotate(8deg); opacity: 0.8; letter-spacing: 2px; z-index: 10; }
-
-    /* --- MAGIE DE L'IMPRESSION --- */
-    @media print {
-      /* La marge 0mm efface l'URL et la Date par défaut du navigateur */
-      @page { size: A4; margin: 0mm; }
-      
-      /* Reset global strict */
-      html, body { background: white !important; color: black !important; margin: 0 !important; padding: 0 !important; height: auto !important; min-height: 0 !important; overflow: visible !important; }
-      .qamc-root, .board, .print-area { display: block !important; width: 100% !important; max-width: none !important; margin: 0 !important; padding: 0 !important; background: none !important; }
-      .no-print { display: none !important; }
-      
-      /* LA MAGIE DU TABLEAU : Thead et Tfoot créent une marge répétée sur CHAQUE page */
-      .print-thead { display: table-header-group !important; }
-      .print-tfoot { display: table-footer-group !important; }
-      .print-spacer { height: 25mm !important; }
-      
-      /* Ajustement du contenu */
-      .print-content { padding: 0 20mm !important; }
-      .report-paper { box-shadow: none !important; padding: 0 !important; margin-bottom: 0 !important; }
-      .report-meta { border: 2px solid #000 !important; }
-      
-      /* Faux pied de page inclus directement dans le Tfoot du tableau. Garanti d'être visible en bas ! */
-      .print-footer-box { 
-        height: 25mm !important; /* Hauteur égale au spacer du tfoot */
-        padding: 0 20mm !important; 
-        box-sizing: border-box !important;
-      }
-      .print-footer-inner {
-        display: flex !important;
-        justify-content: space-between;
-        align-items: flex-end;
-        padding-bottom: 10mm;
-        height: 100%;
-        border-top: 2px dashed #000;
-        font-family: 'Special Elite', monospace;
-        font-size: 11px;
-        color: #000;
-      }
-      .page-number::after {
-        counter-increment: page;
-        content: "PAGE " counter(page);
-      }
-      
-      /* On empêche les blocs de se couper en plein milieu */
-      .report-item { border: 1px solid #000 !important; margin-bottom: 20px !important; box-shadow: none !important; page-break-inside: avoid; break-inside: avoid; }
-      .item-header { background: #e5e5e5 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; border-bottom: 1px solid #000 !important; }
-      
-      /* Tampon DÉCLASSIFIÉ bien ancré à droite pour ne plus déborder sur les marges imprimante */
-      .print-stamp { 
-        -webkit-print-color-adjust: exact; 
-        print-color-adjust: exact; 
-        top: -5mm !important; 
-        right: 0mm !important; 
-        transform: rotate(10deg) !important; 
-      }
-    }
+    .report-item { border: 1px solid #555; margin-bottom: 20px; background: #fff; page-break-inside: avoid; /* Instruction pour la librairie PDF */ }
+    .item-header { background: #e5e5e5; padding: 8px 12px; font-weight: bold; border-bottom: 1px solid #555; font-family: 'Special Elite', monospace; font-size: 15px; min-height: 22px; color: #111; }
+    .item-content { padding: 15px; font-size: 14px; line-height: 1.6; }
+    .item-content p { margin: 8px 0; word-break: break-word; min-height: 18px; }
+    .highlight-owner { font-weight: bold; font-size: 15px; text-transform: uppercase; text-decoration: underline; }
     `;
 
     ReactDOM.createRoot(document.getElementById("root")).render(<App />);
