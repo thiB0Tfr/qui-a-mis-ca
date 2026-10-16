@@ -781,14 +781,14 @@
               )}
             </div>
             
-            {/* L'astuce magique pour l'impression parfaite : le tableau caché */}
-            <table className="report-table">
-              <thead className="print-thead">
-                <tr><td><div className="print-spacer"></div></td></tr>
-              </thead>
-              <tbody>
-                <tr><td className="print-content">
-                  <div className="report-paper">
+            <div className="report-paper">
+              {/* Le contenu encapsulé dans un table pour générer les en-têtes et pieds de page sur CHAQUE page */}
+              <table className="report-table">
+                <thead className="print-thead">
+                  <tr><td><div className="print-spacer"></div></td></tr>
+                </thead>
+                <tbody>
+                  <tr><td className="print-content">
                     <div className="print-stamp">DÉCLASSIFIÉ</div>
                     
                     <h1 className="report-title">
@@ -844,21 +844,20 @@
                         );
                       })}
                     </div>
-                  </div>
-                </td></tr>
-              </tbody>
-              <tfoot className="print-tfoot">
-                <tr><td><div className="print-spacer"></div></td></tr>
-              </tfoot>
-            </table>
-
-            {/* Faux pied de page imprimé, positionné en absolu au bas de la page */}
-            <div className="custom-print-footer">
-              <div className="custom-print-footer-inner">
-                <span>ARCHIVES SECRÈTES - Q.A.M.C</span>
-                <span className="page-number"></span>
-                <span>DOSSIER #{code}</span>
-              </div>
+                  </td></tr>
+                </tbody>
+                <tfoot className="print-tfoot">
+                  <tr><td>
+                    <div className="print-footer-box">
+                      <div className="print-footer-inner">
+                        <span>ARCHIVES SECRÈTES - Q.A.M.C</span>
+                        <span className="page-number"></span>
+                        <span>DOSSIER #{code}</span>
+                      </div>
+                    </div>
+                  </td></tr>
+                </tfoot>
+              </table>
             </div>
 
             <div className="no-print" style={{display: "flex", gap: "10px", marginTop: "20px"}}>
@@ -1022,16 +1021,14 @@
     .highlight-owner { font-weight: bold; font-size: 14px; text-transform: uppercase; }
 
     .print-stamp { position: absolute; top: 15px; right: 15px; color: #d64545; border: 3px solid #d64545; padding: 8px 16px; font-family: 'Special Elite', monospace; font-weight: bold; font-size: 20px; transform: rotate(8deg); opacity: 0.8; letter-spacing: 2px; z-index: 10; }
-    
-    .custom-print-footer { display: none; } /* Caché sur le web classique */
 
-    /* --- MAGIE DE L'IMPRESSION (LAYOUT PARFAIT) --- */
+    /* --- MAGIE DE L'IMPRESSION --- */
     @media print {
-      /* Suppression absolue des en-têtes et pieds de page natifs du navigateur */
+      /* La marge 0mm efface l'URL et la Date par défaut du navigateur */
       @page { size: A4; margin: 0mm; }
       
       /* Reset global strict */
-      html, body { background: white !important; color: black !important; margin: 0 !important; padding: 0 !important; height: 100% !important; }
+      html, body { background: white !important; color: black !important; margin: 0 !important; padding: 0 !important; height: auto !important; min-height: 0 !important; overflow: visible !important; }
       .qamc-root, .board, .print-area { display: block !important; width: 100% !important; max-width: none !important; margin: 0 !important; padding: 0 !important; background: none !important; }
       .no-print { display: none !important; }
       
@@ -1045,24 +1042,18 @@
       .report-paper { box-shadow: none !important; padding: 0 !important; margin-bottom: 0 !important; }
       .report-meta { border: 2px solid #000 !important; }
       
-      /* Faux pied de page fixé en bas de la page physique (il apparaît dans l'espace vide du print-spacer tfoot) */
-      .custom-print-footer { 
-        display: block !important; 
-        position: fixed; 
-        bottom: 0; 
-        left: 0; 
-        width: 100%; 
-        height: 25mm; /* Doit être égal au print-spacer */
-        padding: 0 20mm; 
-        box-sizing: border-box; 
-        background: white; 
-        z-index: 1000;
+      /* Faux pied de page inclus directement dans le Tfoot du tableau. Garanti d'être visible en bas ! */
+      .print-footer-box { 
+        height: 25mm !important; /* Hauteur égale au spacer du tfoot */
+        padding: 0 20mm !important; 
+        box-sizing: border-box !important;
       }
-      .custom-print-footer-inner {
-        display: flex;
+      .print-footer-inner {
+        display: flex !important;
         justify-content: space-between;
-        align-items: flex-start;
-        padding-top: 5mm;
+        align-items: flex-end;
+        padding-bottom: 10mm;
+        height: 100%;
         border-top: 2px dashed #000;
         font-family: 'Special Elite', monospace;
         font-size: 11px;
@@ -1077,7 +1068,7 @@
       .report-item { border: 1px solid #000 !important; margin-bottom: 20px !important; box-shadow: none !important; page-break-inside: avoid; break-inside: avoid; }
       .item-header { background: #e5e5e5 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; border-bottom: 1px solid #000 !important; }
       
-      /* Tampon DÉCLASSIFIÉ bien ancré dans la zone de droite, recadré pour ne plus déborder */
+      /* Tampon DÉCLASSIFIÉ bien ancré à droite pour ne plus déborder sur les marges imprimante */
       .print-stamp { 
         -webkit-print-color-adjust: exact; 
         print-color-adjust: exact; 
