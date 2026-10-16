@@ -1,3 +1,8 @@
-self.addEventListener('fetch', function(event) {
-  // Service worker basique pour autoriser l'installation PWA
+self.addEventListener('install', (e) => {
+  self.skipWaiting();
+});
+
+self.addEventListener('fetch', (e) => {
+  // On laisse passer toutes les requêtes normalement
+  return;
 });
