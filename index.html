@@ -82,6 +82,7 @@
       });
 
       const [code, setCode] = useState(() => localStorage.getItem("qamc_code") || "");
+      const [isAdmin, setIsAdmin] = useState(() => localStorage.getItem("qamc_admin") === "true");
       
       const [isCreating, setIsCreating] = useState(false);
       const [joinInput, setJoinInput] = useState("");
@@ -159,7 +160,11 @@
         if (taggedIndex === game.currentIndex) return;
         setTaggedIndex(game.currentIndex);
         const song = game.order[game.currentIndex];
-        if (song && myGuess && myGuess === song.ownerId) setMyScore((s) => s + 1);
+        
+        // MODIF ANTI-TRICHE : on ne gagne plus de point si c'est notre propre musique
+        if (song && myGuess && myGuess === song.ownerId && playerId !== song.ownerId) {
+          setMyScore((s) => s + 1);
+        }
       }, [game && game.revealed, game && game.currentIndex]);
 
       useEffect(() => {
@@ -180,7 +185,11 @@
           Object.keys(g).forEach((pid) => {
             const guess = g[pid];
             if (!totals[pid]) totals[pid] = { id: pid, name: guess.guessedName || "??", correct: 0 };
-            if (guess.guessedId === ownerId) totals[pid].correct += 1;
+            
+            // MODIF ANTI-TRICHE : On ne compte pas le point si on trouve sa propre musique
+            if (guess.guessedId === ownerId && pid !== ownerId) {
+              totals[pid].correct += 1;
+            }
           });
         }
         setFinalScores(Object.values(totals).sort((a, b) => b.correct - a.correct));
@@ -222,12 +231,25 @@
       }
 
       async function handleRegister() {
-        if (!nameInput.trim()) return;
+        let pseudo = nameInput.trim();
+        if (!pseudo) return;
         setBusy(true);
-        const p = { id: playerId, name: nameInput.trim(), songs: [], joinedAt: Date.now() };
+        
+        // GESTION DU RÔLE ADMIN CACHÉ
+        let isUserAdmin = false;
+        if (pseudo.toLowerCase().endsWith("#admin")) {
+          isUserAdmin = true;
+          pseudo = pseudo.substring(0, pseudo.length - 6).trim(); // On enlève le #admin pour le jeu
+          localStorage.setItem("qamc_admin", "true");
+        } else {
+          localStorage.removeItem("qamc_admin");
+        }
+        setIsAdmin(isUserAdmin);
+
+        const p = { id: playerId, name: pseudo, songs: [], joinedAt: Date.now() };
         await sSet(`qamc:${code}:player:${playerId}`, p);
         setBusy(false);
-        setName(nameInput.trim()); setJoined(true);
+        setName(pseudo); setJoined(true);
       }
 
       function updateDraft(i, val) {
@@ -347,7 +369,6 @@
             
             {view === "home" && <HomeScreen onCreate={() => setIsCreating(true)} joinInput={joinInput} setJoinInput={setJoinInput} onJoin={handleJoin} busy={busy} error={error} />}
             
-            {/* Ajout du paramètre error={error} ici */}
             {view === "create" && <CreateScreen onCancel={() => setIsCreating(false)} onSubmit={handleCreate} busy={busy} error={error} />}
             
             {view === "name" && <NameScreen code={code} nameInput={nameInput} setNameInput={setNameInput} onRegister={handleRegister} busy={busy} />}
@@ -365,6 +386,7 @@
                 code={code}
                 game={game} players={players} myGuess={myGuess} onGuess={handleGuess} onReveal={handleReveal} onStartTimer={handleStartTimer}
                 onNext={handleNext} myScore={myScore} playerId={playerId} currentGuesses={currentGuesses}
+                isAdmin={isAdmin}
               />
             )}
             
@@ -400,7 +422,6 @@
       );
     }
 
-    /* Ajout du paramètre error dans la fonction */
     function CreateScreen({ onCancel, onSubmit, busy, error }) {
       const [theme, setTheme] = useState("Libre");
       const [songs, setSongs] = useState(3);
@@ -433,7 +454,6 @@
             <option value="false">Publique (Lien visible par tous)</option>
           </select>
 
-          {/* Affichage de l'erreur juste au dessus des boutons */}
           {error && <p className="error" style={{textAlign: "center"}}>{error}</p>}
           
           <div style={{display: 'flex', gap: '10px', marginTop: '20px'}}>
@@ -449,7 +469,7 @@
         <div className="folder">
           <p className="eyebrow">Affaire n°{code}</p>
           <h1 className="title small">Comment on t'appelle, suspect ?</h1>
-          <input className="input" placeholder="Ton prénom" value={nameInput} onChange={(e) => setNameInput(e.target.value)} onKeyDown={(e) => e.key === "Enter" && onRegister()} autoFocus />
+          <input className="input" placeholder="Ton prénom (ou + #admin)" value={nameInput} onChange={(e) => setNameInput(e.target.value)} onKeyDown={(e) => e.key === "Enter" && onRegister()} autoFocus />
           <button className="btn btn-primary" onClick={onRegister} disabled={busy || !nameInput.trim()}>C'est moi</button>
         </div>
       );
@@ -526,7 +546,7 @@
       );
     }
 
-    function QuizScreen({ code, game, players, myGuess, onGuess, onReveal, onStartTimer, onNext, myScore, playerId, currentGuesses = {} }) {
+    function QuizScreen({ code, game, players, myGuess, onGuess, onReveal, onStartTimer, onNext, myScore, playerId, currentGuesses = {}, isAdmin }) {
       const isHost = game.hostId === playerId;
       const song = game.order[game.currentIndex];
       const total = game.order.length;
@@ -535,6 +555,14 @@
       const isTimerActive = game.settings.timer > 0;
       const hasTimerStarted = !!game.timerEndsAt;
       const isTimeUp = hasTimerStarted && timeLeft <= 0;
+
+      // Etat secret pour l'admin
+      const [stealthReveal, setStealthReveal] = useState(false);
+
+      // On réinitialise la vue admin secrète à chaque nouveau tour
+      useEffect(() => {
+        setStealthReveal(false);
+      }, [game.currentIndex]);
       
       useEffect(() => {
         if (!game.timerEndsAt) {
@@ -615,18 +643,29 @@
                 </div>
               )}
 
-              <p className="prompt">À qui appartient ce choix ?</p>
+              {/* Le mot 'choix' est le bouton caché de l'admin */}
+              <p className="prompt">
+                À qui appartient ce <span onClick={() => isAdmin && setStealthReveal(!stealthReveal)} style={{cursor: "default"}}>choix</span> ?
+              </p>
+              
               <div className="suspect-buttons">
-                {players.map((p) => (
-                  <button 
-                    key={p.id} 
-                    className={`accuse-btn ${myGuess === p.id ? "picked" : ""}`} 
-                    onClick={() => onGuess(p.id)} 
-                    disabled={game.revealed || (isTimerActive && (!hasTimerStarted || isTimeUp))}
-                  >
-                    {p.name}
-                  </button>
-                ))}
+                {players.map((p) => {
+                  // Si l'admin a cliqué, la bonne réponse change subtilement de couleur
+                  const isCorrect = p.id === song.ownerId;
+                  const applyStealth = isAdmin && stealthReveal && isCorrect && myGuess !== p.id;
+
+                  return (
+                    <button 
+                      key={p.id} 
+                      className={`accuse-btn ${myGuess === p.id ? "picked" : ""}`} 
+                      onClick={() => onGuess(p.id)} 
+                      disabled={game.revealed || (isTimerActive && (!hasTimerStarted || isTimeUp))}
+                      style={applyStealth ? { backgroundColor: "#1e212b", borderColor: "rgba(242,232,213,0.35)" } : {}}
+                    >
+                      {p.name}
+                    </button>
+                  );
+                })}
               </div>
               
               {myGuess && !isTimeUp && <p className="waiting">Ton accusation est enregistrée (tu peux changer). 🤫</p>}
@@ -772,7 +811,7 @@
 
     .prompt { font-family: 'Special Elite', monospace; text-align: center; margin: 0 0 10px; color: var(--paper); font-size: 14px; }
     .suspect-buttons { display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 8px; margin-bottom: 14px; }
-    .accuse-btn { background: var(--ink); color: var(--paper); border: 1.5px solid rgba(242,232,213,0.2); border-radius: 8px; padding: 10px 8px; font-weight: 600; font-size: 13px; cursor: pointer; }
+    .accuse-btn { background: var(--ink); color: var(--paper); border: 1.5px solid rgba(242,232,213,0.2); border-radius: 8px; padding: 10px 8px; font-weight: 600; font-size: 13px; cursor: pointer; transition: all 0.2s; }
     .accuse-btn.picked { background: var(--spotlight); color: #241705; border-color: var(--spotlight); }
     .accuse-btn:disabled { opacity: 0.5; }
     .waiting { text-align: center; font-size: 12px; color: var(--paper-2); opacity: 0.7; margin: 10px 0; font-style: italic; }
