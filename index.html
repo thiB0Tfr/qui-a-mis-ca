@@ -783,84 +783,64 @@
             </div>
             
             <div className="report-paper">
-              {/* Utilisation stricte d'un tableau HTML pour maîtriser le multipage à l'impression */}
-              <table className="report-table">
-                <thead>
-                  <tr><td><div className="print-header-space"></div></td></tr>
-                </thead>
-                <tbody>
-                  <tr>
-                    <td className="report-content">
-                      <div className="print-stamp">DÉCLASSIFIÉ</div>
-                      
-                      <h1 className="report-title">
-                        <Typewriter text="RAPPORT D'OPÉRATION" active={animating} delay={0} />
-                      </h1>
-                      
-                      <div className="report-meta">
-                        <div className="meta-row">
-                          <span><Typewriter text="AFFAIRE N° :" active={animating} delay={300} /></span> 
-                          <strong><Typewriter text={code} active={animating} delay={450} /></strong>
-                        </div>
-                        <div className="meta-row">
-                          <span><Typewriter text="DATE :" active={animating} delay={600} /></span> 
-                          <strong><Typewriter text={new Date().toLocaleDateString('fr-FR')} active={animating} delay={750} /></strong>
-                        </div>
-                        <div className="meta-row">
-                          <span><Typewriter text="THÈME CONCERNÉ :" active={animating} delay={900} /></span> 
-                          <strong><Typewriter text={theme} active={animating} delay={1050} /></strong>
-                        </div>
-                        <div className="meta-row">
-                          <span><Typewriter text="STATUT :" active={animating} delay={1200} /></span> 
-                          <strong><Typewriter text="CLOS" active={animating} delay={1350} /></strong>
-                        </div>
-                      </div>
+              {/* Le Container d'impression qui porte la structure de la page */}
+              <div className="print-container">
+                <div className="print-stamp">DÉCLASSIFIÉ</div>
+                
+                <h1 className="report-title">
+                  <Typewriter text="RAPPORT D'OPÉRATION" active={animating} delay={0} />
+                </h1>
+                
+                <div className="report-meta">
+                  <div className="meta-row">
+                    <span><Typewriter text="AFFAIRE N° :" active={animating} delay={300} /></span> 
+                    <strong><Typewriter text={code} active={animating} delay={450} /></strong>
+                  </div>
+                  <div className="meta-row">
+                    <span><Typewriter text="DATE :" active={animating} delay={600} /></span> 
+                    <strong><Typewriter text={new Date().toLocaleDateString('fr-FR')} active={animating} delay={750} /></strong>
+                  </div>
+                  <div className="meta-row">
+                    <span><Typewriter text="THÈME CONCERNÉ :" active={animating} delay={900} /></span> 
+                    <strong><Typewriter text={theme} active={animating} delay={1050} /></strong>
+                  </div>
+                  <div className="meta-row">
+                    <span><Typewriter text="STATUT :" active={animating} delay={1200} /></span> 
+                    <strong><Typewriter text="CLOS" active={animating} delay={1350} /></strong>
+                  </div>
+                </div>
 
-                      <h2 className="report-section-title">
-                        <Typewriter text="PIÈCES À CONVICTION" active={animating} delay={1600} />
-                      </h2>
-                      
-                      <div className="report-list">
-                        {history.map((h, i) => {
-                          const baseDelay = 1800 + i * 800;
-                          return (
-                            <div key={i} className="report-item">
-                              <div className="item-header">
-                                <Typewriter text={`PIÈCE N°${String(h.trackNum).padStart(2, '0')}`} active={animating} delay={baseDelay} />
-                              </div>
-                              <div className="item-content">
-                                <p>
-                                  <strong><Typewriter text="CONTENU :" active={animating} delay={baseDelay + 150} /></strong> 
-                                  {" "} <Typewriter text={h.url} active={animating} delay={baseDelay + 300} />
-                                </p>
-                                <p>
-                                  <strong><Typewriter text="SUSPECT IDENTIFIÉ :" active={animating} delay={baseDelay + 450} /></strong> 
-                                  {" "} <span className="highlight-owner"><Typewriter text={h.ownerName} active={animating} delay={baseDelay + 600} /></span>
-                                </p>
-                                <p>
-                                  <strong><Typewriter text="DÉDUCTIONS EXACTES :" active={animating} delay={baseDelay + 750} /></strong> 
-                                  {" "} <Typewriter text={h.correctGuessers.length > 0 ? h.correctGuessers.join(", ") : "Aucune. Parfaite dissimulation."} active={animating} delay={baseDelay + 900} />
-                                </p>
-                              </div>
-                            </div>
-                          );
-                        })}
+                <h2 className="report-section-title">
+                  <Typewriter text="PIÈCES À CONVICTION" active={animating} delay={1600} />
+                </h2>
+                
+                <div className="report-list">
+                  {history.map((h, i) => {
+                    const baseDelay = 1800 + i * 800;
+                    return (
+                      <div key={i} className="report-item">
+                        <div className="item-header">
+                          <Typewriter text={`PIÈCE N°${String(h.trackNum).padStart(2, '0')}`} active={animating} delay={baseDelay} />
+                        </div>
+                        <div className="item-content">
+                          <p>
+                            <strong><Typewriter text="CONTENU :" active={animating} delay={baseDelay + 150} /></strong> 
+                            {" "} <Typewriter text={h.url} active={animating} delay={baseDelay + 300} />
+                          </p>
+                          <p>
+                            <strong><Typewriter text="SUSPECT IDENTIFIÉ :" active={animating} delay={baseDelay + 450} /></strong> 
+                            {" "} <span className="highlight-owner"><Typewriter text={h.ownerName} active={animating} delay={baseDelay + 600} /></span>
+                          </p>
+                          <p>
+                            <strong><Typewriter text="DÉDUCTIONS EXACTES :" active={animating} delay={baseDelay + 750} /></strong> 
+                            {" "} <Typewriter text={h.correctGuessers.length > 0 ? h.correctGuessers.join(", ") : "Aucune. Parfaite dissimulation."} active={animating} delay={baseDelay + 900} />
+                          </p>
+                        </div>
                       </div>
-                    </td>
-                  </tr>
-                </tbody>
-                <tfoot>
-                  <tr>
-                    <td>
-                      {/* Ce tfoot va se répéter en bas de chaque page imprimée */}
-                      <div className="custom-print-footer">
-                        <span>ARCHIVES SECRÈTES - Q.A.M.C</span>
-                        <span>DOSSIER #{code}</span>
-                      </div>
-                    </td>
-                  </tr>
-                </tfoot>
-              </table>
+                    );
+                  })}
+                </div>
+              </div>
             </div>
 
             <div className="no-print" style={{display: "flex", gap: "10px", marginTop: "20px"}}>
@@ -1002,13 +982,9 @@
 
     /* --- STYLES DU RAPPORT SECRET --- */
     .print-area { width: 100%; }
-    .report-table { width: 100%; border-collapse: collapse; }
     
     /* STYLE MACHINE À ÉCRIRE */
-    .report-paper { background: #fff; color: #111; font-family: 'Courier Prime', Courier, monospace; position: relative; border-radius: 4px; box-shadow: inset 0 0 20px rgba(0,0,0,0.05); }
-    
-    /* Sur le web, on garde un peu d'espace */
-    .report-content { padding: 30px 24px; position: relative; }
+    .report-paper { background: #fff; color: #111; font-family: 'Courier Prime', Courier, monospace; position: relative; border-radius: 4px; box-shadow: inset 0 0 20px rgba(0,0,0,0.05); padding: 30px 24px; }
     
     .report-title { font-family: 'Special Elite', monospace; font-size: 28px; text-align: center; margin: 0 0 24px; border-bottom: 2px solid #222; padding-bottom: 12px; letter-spacing: 2px; }
     .report-meta { border: 2px solid #222; padding: 12px; margin-bottom: 24px; display: grid; grid-template-columns: 1fr; gap: 8px; font-size: 15px; background: rgba(0,0,0,0.02); }
@@ -1024,8 +1000,6 @@
     .highlight-owner { font-weight: bold; font-size: 14px; text-transform: uppercase; }
 
     .print-stamp { position: absolute; top: 15px; right: 15px; color: #d64545; border: 3px solid #d64545; padding: 8px 16px; font-family: 'Special Elite', monospace; font-weight: bold; font-size: 20px; transform: rotate(8deg); opacity: 0.8; letter-spacing: 2px; z-index: 10; }
-    
-    .custom-print-footer { display: none; } /* Caché sur le web classique */
 
     /* --- MAGIE DE L'IMPRESSION (MARGES & PAGE BLANCHE CORRIGÉES) --- */
     @media print {
@@ -1042,15 +1016,7 @@
       .report-meta { border: 2px solid #000 !important; }
       
       /* On libère l'espace du tableau et on ajoute du padding UNIQUEMENT dans la cellule du contenu */
-      .report-content { padding: 0 15mm !important; }
-      
-      /* Utilisation du thead et tfoot pour forcer une marge de 15mm sur CHAQUE page */
-      thead { display: table-header-group; }
-      tfoot { display: table-footer-group; }
-      .print-header-space { height: 15mm; }
-      
-      /* Notre propre faux pied de page imprimé (plus de bug de CSS counter) */
-      .custom-print-footer { display: flex !important; justify-content: space-between; align-items: flex-end; padding-bottom: 10mm; height: 15mm; font-family: 'Special Elite', monospace; font-size: 12px; font-weight: bold; border-top: 2px solid #000; color: #000; padding-top: 4px; margin: 0 15mm; }
+      .print-container { padding: 0 15mm !important; }
       
       /* On empêche les blocs de se couper à la moitié d'une page */
       .report-item { border: 1px solid #000 !important; margin-bottom: 20px !important; box-shadow: none !important; page-break-inside: avoid; break-inside: avoid; }
@@ -1058,8 +1024,8 @@
       /* Forcer les couleurs sur les imprimantes pour le fond gris et le tampon rouge */
       .item-header { background: #e5e5e5 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; border-bottom: 1px solid #000 !important; }
       
-      /* Décalage du tampon vers la droite pour éviter la coupure (15mm de marge) */
-      .print-stamp { -webkit-print-color-adjust: exact; print-color-adjust: exact; top: 15mm !important; right: 15mm !important; transform: rotate(12deg) !important; }
+      /* Décalage du tampon pour le remonter et éviter qu'il n'écrase le texte */
+      .print-stamp { -webkit-print-color-adjust: exact; print-color-adjust: exact; top: 0mm !important; right: 10mm !important; transform: rotate(12deg) !important; }
     }
     `;
 
