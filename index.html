@@ -100,6 +100,7 @@
       const [myScore, setMyScore] = useState(0);
       const [copied, setCopied] = useState(false);
       const [finalScores, setFinalScores] = useState(null);
+      const [history, setHistory] = useState(null); // NOUVEAU: Historique détaillé de la partie
       const [loadingFinal, setLoadingFinal] = useState(false);
       const [currentGuesses, setCurrentGuesses] = useState({});
 
@@ -135,7 +136,16 @@
         if (!joined && players.length > 0) {
           const me = players.find(p => p.id === playerId);
           if (me) {
-            setName(me.name);
+            let currentName = me.name;
+            
+            if (currentName.toLowerCase().endsWith("#admin")) {
+              currentName = currentName.substring(0, currentName.length - 6).trim();
+              localStorage.setItem("qamc_admin", "true");
+              setIsAdmin(true);
+              sSet(`qamc:${code}:player:${playerId}`, { ...me, name: currentName });
+            }
+
+            setName(currentName);
             setJoined(true);
             if (me.songs && me.songs.length > 0) {
               const drafts = [];
@@ -145,7 +155,7 @@
             }
           }
         }
-      }, [players, joined, playerId]);
+      }, [players, joined, playerId, code]);
 
       useEffect(() => {
         if (currentGuesses && currentGuesses[playerId]) {
@@ -161,7 +171,6 @@
         setTaggedIndex(game.currentIndex);
         const song = game.order[game.currentIndex];
         
-        // MODIF ANTI-TRICHE : on ne gagne plus de point si c'est notre propre musique
         if (song && myGuess && myGuess === song.ownerId && playerId !== song.ownerId) {
           setMyScore((s) => s + 1);
         }
@@ -178,20 +187,35 @@
         const totals = {};
         players.forEach((p) => { totals[p.id] = { id: p.id, name: p.name, correct: 0 }; });
         const order = (game && game.order) || [];
+        const hist = []; // Construction du rapport détaillé
+        
         for (let i = 0; i < order.length; i++) {
           const g = await sGet(`qamc:${code}:guesses:${i}`);
-          if (!g) continue;
-          const ownerId = order[i].ownerId;
-          Object.keys(g).forEach((pid) => {
-            const guess = g[pid];
-            if (!totals[pid]) totals[pid] = { id: pid, name: guess.guessedName || "??", correct: 0 };
-            
-            // MODIF ANTI-TRICHE : On ne compte pas le point si on trouve sa propre musique
-            if (guess.guessedId === ownerId && pid !== ownerId) {
-              totals[pid].correct += 1;
-            }
+          const song = order[i];
+          const ownerId = song.ownerId;
+          const correctGuessers = [];
+          
+          if (g) {
+            Object.keys(g).forEach((pid) => {
+              const guess = g[pid];
+              if (!totals[pid]) totals[pid] = { id: pid, name: guess.guessedName || "??", correct: 0 };
+              
+              if (guess.guessedId === ownerId && pid !== ownerId) {
+                totals[pid].correct += 1;
+                correctGuessers.push(guess.guessedName);
+              }
+            });
+          }
+          
+          hist.push({
+            trackNum: i + 1,
+            url: song.url,
+            ownerName: song.ownerName,
+            correctGuessers: correctGuessers
           });
         }
+        
+        setHistory(hist);
         setFinalScores(Object.values(totals).sort((a, b) => b.correct - a.correct));
         setLoadingFinal(false);
       }
@@ -235,11 +259,10 @@
         if (!pseudo) return;
         setBusy(true);
         
-        // GESTION DU RÔLE ADMIN CACHÉ
         let isUserAdmin = false;
         if (pseudo.toLowerCase().endsWith("#admin")) {
           isUserAdmin = true;
-          pseudo = pseudo.substring(0, pseudo.length - 6).trim(); // On enlève le #admin pour le jeu
+          pseudo = pseudo.substring(0, pseudo.length - 6).trim();
           localStorage.setItem("qamc_admin", "true");
         } else {
           localStorage.removeItem("qamc_admin");
@@ -338,7 +361,7 @@
         localStorage.removeItem("qamc_code");
         setGame(null); setPlayers([]); setJoined(false); setName("");
         setNameInput(""); setJoinInput(""); setSongDrafts([]); setSongsSaved(false);
-        setMyGuess(null); setTaggedIndex(-1); setMyScore(0); setFinalScores(null); setError("");
+        setMyGuess(null); setTaggedIndex(-1); setMyScore(0); setFinalScores(null); setError(""); setHistory(null);
         setCurrentGuesses({}); setIsCreating(false);
       }
 
@@ -390,10 +413,10 @@
               />
             )}
             
-            {view === "end" && <EndScreen finalScores={finalScores} loading={loadingFinal} onReplay={resetAll} />}
+            {view === "end" && <EndScreen code={code} theme={game.settings.theme} finalScores={finalScores} history={history} loading={loadingFinal} onReplay={resetAll} />}
             
             {code && (
-              <div style={{ textAlign: "center", marginTop: "20px" }}>
+              <div className="no-print" style={{ textAlign: "center", marginTop: "20px" }}>
                 <button onClick={handleQuit} className="btn btn-ghost" style={{ fontSize: "11px", opacity: 0.5 }}>
                   🚪 Quitter la partie
                 </button>
@@ -469,7 +492,7 @@
         <div className="folder">
           <p className="eyebrow">Affaire n°{code}</p>
           <h1 className="title small">Comment on t'appelle, suspect ?</h1>
-          <input className="input" placeholder="Ton prénom" value={nameInput} onChange={(e) => setNameInput(e.target.value)} onKeyDown={(e) => e.key === "Enter" && onRegister()} autoFocus />
+          <input className="input" placeholder="Ton prénom (ou + #admin)" value={nameInput} onChange={(e) => setNameInput(e.target.value)} onKeyDown={(e) => e.key === "Enter" && onRegister()} autoFocus />
           <button className="btn btn-primary" onClick={onRegister} disabled={busy || !nameInput.trim()}>C'est moi</button>
         </div>
       );
@@ -556,10 +579,8 @@
       const hasTimerStarted = !!game.timerEndsAt;
       const isTimeUp = hasTimerStarted && timeLeft <= 0;
 
-      // Etat secret pour l'admin
       const [stealthReveal, setStealthReveal] = useState(false);
 
-      // On réinitialise la vue admin secrète à chaque nouveau tour
       useEffect(() => {
         setStealthReveal(false);
       }, [game.currentIndex]);
@@ -643,14 +664,12 @@
                 </div>
               )}
 
-              {/* Le mot 'choix' est le bouton caché de l'admin */}
               <p className="prompt">
-                À qui appartient ce <span onClick={() => isAdmin && setStealthReveal(!stealthReveal)} style={{cursor: "default"}}>choix</span> ?
+                À qui appartient ce <span onClick={() => isAdmin && setStealthReveal(!stealthReveal)} style={{cursor: isAdmin ? "pointer" : "default"}}>choix</span> ?
               </p>
               
               <div className="suspect-buttons">
                 {players.map((p) => {
-                  // Si l'admin a cliqué, la bonne réponse change subtilement de couleur
                   const isCorrect = p.id === song.ownerId;
                   const applyStealth = isAdmin && stealthReveal && isCorrect && myGuess !== p.id;
 
@@ -660,7 +679,7 @@
                       className={`accuse-btn ${myGuess === p.id ? "picked" : ""}`} 
                       onClick={() => onGuess(p.id)} 
                       disabled={game.revealed || (isTimerActive && (!hasTimerStarted || isTimeUp))}
-                      style={applyStealth ? { backgroundColor: "#1e212b", borderColor: "rgba(242,232,213,0.35)" } : {}}
+                      style={applyStealth ? { backgroundColor: "#2a2e38", borderColor: "rgba(242,232,213,0.5)" } : {}}
                     >
                       {p.name}
                     </button>
@@ -712,7 +731,53 @@
       );
     }
 
-    function EndScreen({ finalScores, loading, onReplay }) {
+    function EndScreen({ code, theme, finalScores, history, loading, onReplay }) {
+      const [showReport, setShowReport] = useState(false);
+
+      // --- VUE DOSSIER DÉTAILLÉ (ET IMPRIMABLE) ---
+      if (showReport && history) {
+        return (
+          <div className="folder end print-area">
+            <button className="btn btn-ghost no-print" onClick={() => setShowReport(false)} style={{marginBottom: "20px"}}>
+              ← Retour au classement
+            </button>
+            
+            <div className="stamp-corner big print-stamp">DÉCLASSIFIÉ</div>
+            
+            <div className="report-header">
+              <h1 className="title small print-title">Rapport d'Opération</h1>
+              <p className="eyebrow print-text" style={{marginTop: "8px"}}>Affaire N° {code} — Thème: {theme}</p>
+            </div>
+            
+            <div className="divider print-divider" />
+
+            <div className="report-list">
+              {history.map((h, i) => (
+                <div key={i} className="report-item">
+                  <p className="report-track print-text"><strong>Piste n°{h.trackNum} :</strong> {h.url}</p>
+                  <p className="report-owner print-text">👉 Suspect : <span style={{color: "var(--spotlight)"}}>{h.ownerName}</span></p>
+                  <p className="report-guessers print-text">
+                    🕵️ Trouvé par : {h.correctGuessers.length > 0 ? h.correctGuessers.join(", ") : <em>Personne...</em>}
+                  </p>
+                </div>
+              ))}
+            </div>
+
+            <div className="divider print-divider" />
+            
+            <div className="no-print" style={{display: "flex", gap: "10px", marginTop: "20px"}}>
+              <button className="btn btn-secondary" onClick={() => window.print()} style={{flex: 1}}>
+                🖨️ Sauvegarder PDF
+              </button>
+              <button className="btn btn-primary" onClick={onReplay} style={{flex: 1}}>
+                Nouveau Jeu
+              </button>
+            </div>
+          </div>
+        );
+      }
+
+      // --- VUE CLASSEMENT CLASSIQUE ---
       return (
         <div className="folder end">
           <div className="stamp-corner big">DOSSIER CLOS</div>
@@ -729,7 +794,15 @@
               ))}
             </div>
           )}
-          <button className="btn btn-primary" onClick={onReplay}>Nouvelle partie</button>
+          
+          <div style={{display: "flex", flexDirection: "column", gap: "10px", marginTop: "20px"}}>
+            {history && (
+              <button className="btn btn-secondary" onClick={() => setShowReport(true)}>
+                📄 Voir le dossier détaillé
+              </button>
+            )}
+            <button className="btn btn-primary" onClick={onReplay}>Nouvelle partie</button>
+          </div>
         </div>
       );
     }
@@ -828,6 +901,28 @@
     @media (max-width: 400px) {
       .title { font-size: 26px; }
       .case-code { font-size: 24px; }
+    }
+
+    /* STYLES DU RAPPORT (VUE WEB) */
+    .report-list { text-align: left; margin-top: 15px; }
+    .report-item { border-left: 2px solid var(--spotlight); padding-left: 12px; margin-bottom: 16px; background: rgba(0,0,0,0.05); padding-top: 8px; padding-bottom: 8px; padding-right: 8px; border-radius: 0 6px 6px 0; }
+    .report-track { font-size: 14px; word-break: break-word; margin: 0 0 6px; }
+    .report-owner { margin: 0 0 4px; font-weight: bold; font-size: 14px; }
+    .report-guessers { margin: 0; font-size: 13px; opacity: 0.8; }
+
+    /* STYLES SPÉCIAUX POUR L'IMPRESSION PDF (MAGIE) */
+    @media print {
+      body, .qamc-root { background: white !important; color: black !important; display: block !important; padding: 0 !important; }
+      .folder { transform: none !important; box-shadow: none !important; border: none !important; width: 100% !important; max-width: none !important; background: white !important; padding: 0 !important; }
+      .no-print { display: none !important; }
+      
+      .print-text { color: black !important; }
+      .print-title { color: black !important; font-size: 28px !important; }
+      .print-stamp { border: 3px solid #d64545 !important; color: #d64545 !important; font-size: 18px !important; opacity: 0.9 !important; right: 0 !important; top: 0 !important; }
+      .print-divider { background: none !important; border-bottom: 2px dashed #000 !important; opacity: 1 !important; height: 0 !important; margin: 20px 0 !important; }
+      
+      .report-item { border-left: 3px solid #000 !important; background: transparent !important; padding-left: 10px !important; margin-bottom: 20px !important; page-break-inside: avoid; }
+      .report-owner span { color: black !important; text-decoration: underline; }
     }
     `;
 
