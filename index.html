@@ -469,7 +469,7 @@
         <div className="folder">
           <p className="eyebrow">Affaire n°{code}</p>
           <h1 className="title small">Comment on t'appelle, suspect ?</h1>
-          <input className="input" placeholder="Ton prénom (ou + #admin)" value={nameInput} onChange={(e) => setNameInput(e.target.value)} onKeyDown={(e) => e.key === "Enter" && onRegister()} autoFocus />
+          <input className="input" placeholder="Ton prénom" value={nameInput} onChange={(e) => setNameInput(e.target.value)} onKeyDown={(e) => e.key === "Enter" && onRegister()} autoFocus />
           <button className="btn btn-primary" onClick={onRegister} disabled={busy || !nameInput.trim()}>C'est moi</button>
         </div>
       );
