@@ -4,6 +4,14 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Qui a mis ça ? - Édition Maître du Jeu</title>
+  
+  <!-- Configuration PWA (App Mobile) -->
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#14161c">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <link rel="apple-touch-icon" href="icon.png">
+
   <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
   <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
@@ -197,7 +205,7 @@
         
         const ok = await sSet(`qamc:${c}:game`, g);
         setBusy(false);
-        if (!ok) { setError("Impossible de créer l'enquête."); return; }
+        if (!ok) { setError("Impossible de créer l'enquête (vérifie ta base de données Firebase)."); return; }
         setIsCreating(false);
         setGame(g); 
         setCode(c);
@@ -312,7 +320,6 @@
         setCurrentGuesses({}); setIsCreating(false);
       }
 
-      // La nouvelle fonction pour le bouton "Quitter"
       function handleQuit() {
         if (window.confirm("Es-tu sûr de vouloir quitter cette affaire ? Tu devras rejoindre à nouveau avec le code si tu changes d'avis.")) {
           resetAll();
@@ -337,9 +344,14 @@
           <style>{CSS}</style>
           <div className="board">
             {view === "loading" && <div className="folder"><p className="lobby-hint">Chargement du dossier…</p></div>}
+            
             {view === "home" && <HomeScreen onCreate={() => setIsCreating(true)} joinInput={joinInput} setJoinInput={setJoinInput} onJoin={handleJoin} busy={busy} error={error} />}
-            {view === "create" && <CreateScreen onCancel={() => setIsCreating(false)} onSubmit={handleCreate} busy={busy} />}
+            
+            {/* Ajout du paramètre error={error} ici */}
+            {view === "create" && <CreateScreen onCancel={() => setIsCreating(false)} onSubmit={handleCreate} busy={busy} error={error} />}
+            
             {view === "name" && <NameScreen code={code} nameInput={nameInput} setNameInput={setNameInput} onRegister={handleRegister} busy={busy} />}
+            
             {view === "lobby" && (
               <LobbyScreen
                 code={code} copied={copied} onCopy={copyCode} players={players} songDrafts={songDrafts} updateDraft={updateDraft}
@@ -347,6 +359,7 @@
                 readyCount={readyPlayers.length} totalEvidence={totalEvidence} playerId={playerId} isHost={game.hostId === playerId} game={game}
               />
             )}
+            
             {view === "quiz" && game && (
               <QuizScreen
                 code={code}
@@ -354,6 +367,7 @@
                 onNext={handleNext} myScore={myScore} playerId={playerId} currentGuesses={currentGuesses}
               />
             )}
+            
             {view === "end" && <EndScreen finalScores={finalScores} loading={loadingFinal} onReplay={resetAll} />}
             
             {code && (
@@ -386,7 +400,8 @@
       );
     }
 
-    function CreateScreen({ onCancel, onSubmit, busy }) {
+    /* Ajout du paramètre error dans la fonction */
+    function CreateScreen({ onCancel, onSubmit, busy, error }) {
       const [theme, setTheme] = useState("Libre");
       const [songs, setSongs] = useState(3);
       const [timer, setTimer] = useState(0);
@@ -418,6 +433,9 @@
             <option value="false">Publique (Lien visible par tous)</option>
           </select>
 
+          {/* Affichage de l'erreur juste au dessus des boutons */}
+          {error && <p className="error" style={{textAlign: "center"}}>{error}</p>}
+          
           <div style={{display: 'flex', gap: '10px', marginTop: '20px'}}>
              <button className="btn btn-ghost" onClick={onCancel} disabled={busy} style={{color: 'var(--pencil)', border: '1px solid var(--pencil)'}}>Annuler</button>
              <button className="btn btn-primary" onClick={() => onSubmit({theme: theme || "Libre", songsPerPlayer: songs, timer, secretTracks: secret})} disabled={busy}>Ouvrir le dossier</button>
@@ -775,6 +793,13 @@
     `;
 
     ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+  </script>
+
+  <!-- Script d'activation pour la PWA (Service Worker) -->
+  <script>
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('sw.js');
+    }
   </script>
 </body>
 </html>
