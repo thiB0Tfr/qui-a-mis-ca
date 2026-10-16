@@ -100,7 +100,7 @@
       const [myScore, setMyScore] = useState(0);
       const [copied, setCopied] = useState(false);
       const [finalScores, setFinalScores] = useState(null);
-      const [history, setHistory] = useState(null); // NOUVEAU: Historique détaillé de la partie
+      const [history, setHistory] = useState(null); 
       const [loadingFinal, setLoadingFinal] = useState(false);
       const [currentGuesses, setCurrentGuesses] = useState({});
 
@@ -187,7 +187,7 @@
         const totals = {};
         players.forEach((p) => { totals[p.id] = { id: p.id, name: p.name, correct: 0 }; });
         const order = (game && game.order) || [];
-        const hist = []; // Construction du rapport détaillé
+        const hist = []; 
         
         for (let i = 0; i < order.length; i++) {
           const g = await sGet(`qamc:${code}:guesses:${i}`);
@@ -734,37 +734,42 @@
     function EndScreen({ code, theme, finalScores, history, loading, onReplay }) {
       const [showReport, setShowReport] = useState(false);
 
-      // --- VUE DOSSIER DÉTAILLÉ (ET IMPRIMABLE) ---
+      // --- NOUVELLE VUE : DOSSIER DÉTAILLÉ (ET IMPRIMABLE) ---
       if (showReport && history) {
         return (
-          <div className="folder end print-area">
+          <div className="print-area">
             <button className="btn btn-ghost no-print" onClick={() => setShowReport(false)} style={{marginBottom: "20px"}}>
               ← Retour au classement
             </button>
             
-            <div className="stamp-corner big print-stamp">DÉCLASSIFIÉ</div>
-            
-            <div className="report-header">
-              <h1 className="title small print-title">Rapport d'Opération</h1>
-              <p className="eyebrow print-text" style={{marginTop: "8px"}}>Affaire N° {code} — Thème: {theme}</p>
-            </div>
-            
-            <div className="divider print-divider" />
+            <div className="report-paper">
+              <div className="print-stamp">DÉCLASSIFIÉ</div>
+              
+              <h1 className="report-title">RAPPORT D'OPÉRATION</h1>
+              
+              <div className="report-meta">
+                <div className="meta-row"><span>AFFAIRE N° :</span> <strong>{code}</strong></div>
+                <div className="meta-row"><span>DATE :</span> <strong>{new Date().toLocaleDateString('fr-FR')}</strong></div>
+                <div className="meta-row"><span>THÈME CONCERNÉ :</span> <strong>{theme}</strong></div>
+                <div className="meta-row"><span>STATUT :</span> <strong>CLOS</strong></div>
+              </div>
 
-            <div className="report-list">
-              {history.map((h, i) => (
-                <div key={i} className="report-item">
-                  <p className="report-track print-text"><strong>Piste n°{h.trackNum} :</strong> {h.url}</p>
-                  <p className="report-owner print-text">👉 Suspect : <span style={{color: "var(--spotlight)"}}>{h.ownerName}</span></p>
-                  <p className="report-guessers print-text">
-                    🕵️ Trouvé par : {h.correctGuessers.length > 0 ? h.correctGuessers.join(", ") : <em>Personne...</em>}
-                  </p>
-                </div>
-              ))}
+              <h2 className="report-section-title">PIÈCES À CONVICTION</h2>
+              
+              <div className="report-list">
+                {history.map((h, i) => (
+                  <div key={i} className="report-item">
+                    <div className="item-header">PIÈCE N°{String(h.trackNum).padStart(2, '0')}</div>
+                    <div className="item-content">
+                      <p><strong>CONTENU :</strong> {h.url}</p>
+                      <p><strong>SUSPECT IDENTIFIÉ :</strong> <span className="highlight-owner">{h.ownerName}</span></p>
+                      <p><strong>DÉDUCTIONS EXACTES :</strong> {h.correctGuessers.length > 0 ? h.correctGuessers.join(", ") : "Aucune. Parfaite dissimulation."}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
 
-            <div className="divider print-divider" />
-            
             <div className="no-print" style={{display: "flex", gap: "10px", marginTop: "20px"}}>
               <button className="btn btn-secondary" onClick={() => window.print()} style={{flex: 1}}>
                 🖨️ Sauvegarder PDF
@@ -777,7 +782,7 @@
         );
       }
 
-      // --- VUE CLASSEMENT CLASSIQUE ---
+      // --- VUE CLASSIQUE : CLASSEMENT ---
       return (
         <div className="folder end">
           <div className="stamp-corner big">DOSSIER CLOS</div>
@@ -903,33 +908,43 @@
       .case-code { font-size: 24px; }
     }
 
-    /* STYLES DU RAPPORT (VUE WEB) */
-    .report-list { text-align: left; margin-top: 15px; }
-    .report-item { border-left: 2px solid var(--spotlight); padding-left: 12px; margin-bottom: 16px; background: rgba(0,0,0,0.05); padding-top: 8px; padding-bottom: 8px; padding-right: 8px; border-radius: 0 6px 6px 0; }
-    .report-track { font-size: 14px; word-break: break-word; margin: 0 0 6px; }
-    .report-owner { margin: 0 0 4px; font-weight: bold; font-size: 14px; }
-    .report-guessers { margin: 0; font-size: 13px; opacity: 0.8; }
+    /* --- STYLES DU RAPPORT SECRET --- */
+    .print-area { width: 100%; }
+    .report-paper { background: #fff; color: #111; padding: 30px 24px; border-radius: 4px; font-family: 'Courier New', Courier, monospace; position: relative; box-shadow: inset 0 0 20px rgba(0,0,0,0.05); text-align: left; }
+    .report-title { font-family: 'Special Elite', monospace; font-size: 26px; text-align: center; margin: 0 0 24px; border-bottom: 2px solid #111; padding-bottom: 12px; letter-spacing: 2px; }
+    .report-meta { border: 2px solid #111; padding: 12px; margin-bottom: 24px; display: grid; grid-template-columns: 1fr; gap: 8px; font-size: 14px; }
+    .meta-row { display: flex; justify-content: space-between; border-bottom: 1px dotted #888; padding-bottom: 4px; }
+    .meta-row:last-child { border-bottom: none; padding-bottom: 0; }
+    .report-section-title { font-size: 16px; border-bottom: 1px solid #111; margin-bottom: 16px; padding-bottom: 6px; font-weight: bold; }
+    
+    .report-list { text-align: left; }
+    .report-item { border: 1px solid #999; margin-bottom: 16px; background: #fff; }
+    .item-header { background: #eee; padding: 6px 10px; font-weight: bold; border-bottom: 1px solid #999; font-family: 'Special Elite', monospace; font-size: 14px; }
+    .item-content { padding: 10px; font-size: 13px; line-height: 1.5; }
+    .item-content p { margin: 6px 0; word-break: break-word; }
+    .highlight-owner { font-weight: bold; font-size: 14px; text-transform: uppercase; }
 
-    /* STYLES SPÉCIAUX POUR L'IMPRESSION PDF (MAGIE) */
+    .print-stamp { position: absolute; top: 15px; right: -5px; color: #d64545; border: 3px solid #d64545; padding: 6px 12px; font-family: 'Special Elite', monospace; font-weight: bold; font-size: 18px; transform: rotate(12deg); opacity: 0.85; letter-spacing: 2px; }
+
+    /* --- MAGIE DE L'IMPRESSION (CORRECTION PAGE BLANCHE) --- */
     @media print {
-      body, .qamc-root { background: white !important; color: black !important; display: block !important; padding: 0 !important; }
-      .folder { transform: none !important; box-shadow: none !important; border: none !important; width: 100% !important; max-width: none !important; background: white !important; padding: 0 !important; }
+      @page { size: auto; margin: 15mm; }
+      html, body { background: white !important; color: black !important; margin: 0 !important; padding: 0 !important; height: auto !important; min-height: 0 !important; overflow: visible !important; }
+      .qamc-root { display: block !important; height: auto !important; min-height: 0 !important; padding: 0 !important; background: none !important; }
+      .board { max-width: 100% !important; width: 100% !important; margin: 0 !important; }
       .no-print { display: none !important; }
       
-      .print-text { color: black !important; }
-      .print-title { color: black !important; font-size: 28px !important; }
-      .print-stamp { border: 3px solid #d64545 !important; color: #d64545 !important; font-size: 18px !important; opacity: 0.9 !important; right: 0 !important; top: 0 !important; }
-      .print-divider { background: none !important; border-bottom: 2px dashed #000 !important; opacity: 1 !important; height: 0 !important; margin: 20px 0 !important; }
-      
-      .report-item { border-left: 3px solid #000 !important; background: transparent !important; padding-left: 10px !important; margin-bottom: 20px !important; page-break-inside: avoid; }
-      .report-owner span { color: black !important; text-decoration: underline; }
+      .report-paper { box-shadow: none !important; padding: 0 !important; }
+      .report-meta { border: 2px solid #000 !important; }
+      .report-item { border: 1px solid #000 !important; margin-bottom: 20px !important; page-break-inside: avoid; }
+      .item-header { background: #f0f0f0 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; border-bottom: 1px solid #000 !important; }
+      .print-stamp { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
     }
     `;
 
     ReactDOM.createRoot(document.getElementById("root")).render(<App />);
   </script>
 
-  <!-- Script d'activation pour la PWA (Service Worker) -->
   <script>
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.register('sw.js');
