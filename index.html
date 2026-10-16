@@ -734,7 +734,6 @@
     function EndScreen({ code, theme, finalScores, history, loading, onReplay }) {
       const [showReport, setShowReport] = useState(false);
 
-      // --- NOUVELLE VUE : DOSSIER DÉTAILLÉ (ET IMPRIMABLE) ---
       if (showReport && history) {
         return (
           <div className="print-area">
@@ -770,6 +769,12 @@
               </div>
             </div>
 
+            {/* Notre faux pied de page répété à l'impression */}
+            <div className="custom-print-footer" style={{ display: "none" }}>
+              <span>ARCHIVES SECRETES - Q.A.M.C</span>
+              <span>DOSSIER #{code}</span>
+            </div>
+
             <div className="no-print" style={{display: "flex", gap: "10px", marginTop: "20px"}}>
               <button className="btn btn-secondary" onClick={() => window.print()} style={{flex: 1}}>
                 🖨️ Sauvegarder PDF
@@ -782,7 +787,6 @@
         );
       }
 
-      // --- VUE CLASSIQUE : CLASSEMENT ---
       return (
         <div className="folder end">
           <div className="stamp-corner big">DOSSIER CLOS</div>
@@ -924,27 +928,41 @@
     .item-content p { margin: 6px 0; word-break: break-word; }
     .highlight-owner { font-weight: bold; font-size: 14px; text-transform: uppercase; }
 
-    .print-stamp { position: absolute; top: 15px; right: -5px; color: #d64545; border: 3px solid #d64545; padding: 6px 12px; font-family: 'Special Elite', monospace; font-weight: bold; font-size: 18px; transform: rotate(12deg); opacity: 0.85; letter-spacing: 2px; }
+    .print-stamp { position: absolute; top: 15px; right: 15px; color: #d64545; border: 3px solid #d64545; padding: 6px 12px; font-family: 'Special Elite', monospace; font-weight: bold; font-size: 18px; transform: rotate(10deg); opacity: 0.85; letter-spacing: 2px; z-index: 10; }
 
-    /* --- MAGIE DE L'IMPRESSION (CORRECTION PAGE BLANCHE) --- */
+    /* --- MAGIE DE L'IMPRESSION (CORRECTION DES BUGS) --- */
     @media print {
-      @page { size: auto; margin: 15mm; }
+      /* La marge 0mm efface l'URL et la Date par défaut du navigateur */
+      @page { size: auto; margin: 0mm; }
+      
+      /* Désactive la taille fixe de l'écran pour éviter la dernière page blanche */
       html, body { background: white !important; color: black !important; margin: 0 !important; padding: 0 !important; height: auto !important; min-height: 0 !important; overflow: visible !important; }
-      .qamc-root { display: block !important; height: auto !important; min-height: 0 !important; padding: 0 !important; background: none !important; }
+      
+      /* Remplace les marges effacées par le @page par nos propres marges internes */
+      .qamc-root { display: block !important; padding: 15mm 20mm 20mm 20mm !important; background: none !important; height: auto !important; min-height: 0 !important; }
+      
       .board { max-width: 100% !important; width: 100% !important; margin: 0 !important; }
       .no-print { display: none !important; }
       
       .report-paper { box-shadow: none !important; padding: 0 !important; }
       .report-meta { border: 2px solid #000 !important; }
+      
+      /* On empêche les blocs de se couper à la moitié d'une page */
       .report-item { border: 1px solid #000 !important; margin-bottom: 20px !important; page-break-inside: avoid; }
+      
+      /* Forcer les couleurs sur les imprimantes pour le fond gris et le tampon rouge */
       .item-header { background: #f0f0f0 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; border-bottom: 1px solid #000 !important; }
-      .print-stamp { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+      .print-stamp { -webkit-print-color-adjust: exact; print-color-adjust: exact; top: 0px !important; right: 20px !important; transform: rotate(12deg) !important; }
+
+      /* Notre propre faux pied de page répété avec notre Direction Artistique */
+      .custom-print-footer { display: flex !important; justify-content: space-between; position: fixed; bottom: 10mm; left: 20mm; right: 20mm; font-family: 'Special Elite', monospace; font-size: 11px; border-top: 2px dashed #000; padding-top: 5px; color: #000; page-break-after: avoid; }
     }
     `;
 
     ReactDOM.createRoot(document.getElementById("root")).render(<App />);
   </script>
 
+  <!-- Script d'activation pour la PWA (Service Worker) -->
   <script>
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.register('sw.js');
